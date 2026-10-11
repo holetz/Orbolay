@@ -1,11 +1,12 @@
 use std::{
-  collections::HashMap,
+  collections::{HashMap, VecDeque},
   sync::{Arc, RwLock, atomic::AtomicBool},
 };
 
 use crate::{
   config::{Config, TransportMode},
   payloads::{Notification, SoundboardSoundPayload},
+  transcript::{TranscriptLine, push_capped},
   user::{PremiumType, User},
   util::bridge::BridgeMessage,
 };
@@ -78,6 +79,7 @@ pub struct AppState {
   pub is_censor: bool, // Used in modded clients but not IPC
   pub voice_users: Vec<User>,
   pub messages: Vec<Notification>,
+  pub transcript: VecDeque<TranscriptLine>,
   pub soundboard_cache: HashMap<String, Vec<SoundboardSoundPayload>>,
 
   // Name caches
@@ -111,6 +113,7 @@ impl AppState {
       is_censor: false,
       voice_users: vec![],
       messages: vec![],
+      transcript: VecDeque::new(),
       soundboard_cache: HashMap::new(),
 
       guild_names: default_guild_names,
@@ -136,5 +139,68 @@ impl AppState {
     }
 
     self.messages.push(notification);
+  }
+
+  /// Adds a transcript line, or replaces the line with the same id, capped at `rttMaxLines`.
+  pub fn push_transcript(&mut self, line: TranscriptLine) {
+    push_capped(&mut self.transcript, line, self.config.rtt_max_lines);
+  }
+
+  /// Refines the text of an existing partial line in place. Returns false when no such line exists.
+  pub fn update_partial(&mut self, id: &str, text: String, is_partial: bool) -> bool {
+    match self.transcript.iter_mut().find(|l| l.id == id) {
+      Some(line) => {
+        line.text = text;
+        line.is_partial = is_partial;
+        true
+      }
+      None => false,
+    }
+  }
+
+  pub fn clear_transcript(&mut self) {
+    self.transcript.clear();
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::transcript::TranscriptSource;
+
+  fn line(id: &str, text: &str, is_partial: bool) -> TranscriptLine {
+    TranscriptLine {
+      id: id.into(),
+      speaker_id: None,
+      speaker_name: "Bob".into(),
+      text: text.into(),
+      started_at: 0,
+      ended_at: 0,
+      is_partial,
+      source: TranscriptSource::Loopback,
+    }
+  }
+
+  #[test]
+  fn push_respects_configured_cap() {
+    let mut state = AppState::new();
+    state.config.rtt_max_lines = 2;
+    for i in 0..4 {
+      state.push_transcript(line(&i.to_string(), "x", false));
+    }
+    assert_eq!(state.transcript.len(), 2);
+    assert_eq!(state.transcript[0].id, "2");
+  }
+
+  #[test]
+  fn update_partial_and_clear() {
+    let mut state = AppState::new();
+    state.push_transcript(line("a", "he", true));
+    assert!(state.update_partial("a", "hello".into(), false));
+    assert_eq!(state.transcript[0].text, "hello");
+    assert!(!state.transcript[0].is_partial);
+    assert!(!state.update_partial("missing", "x".into(), false));
+    state.clear_transcript();
+    assert!(state.transcript.is_empty());
   }
 }

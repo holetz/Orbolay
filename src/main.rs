@@ -20,7 +20,7 @@ use orbolay_core::{
 use orbolay_logging::{log, warn};
 use orbolay_transport::{create_transport_thread, maybe_notify_update, start_config_watcher};
 use orbolay_ui::{
-  components::{MessagesSection, Soundboard, VoiceControls, VoiceSection},
+  components::{CaptionPanel, MessagesSection, Soundboard, VoiceControls, VoiceSection},
   open_configurator, open_configurator_standalone,
   util::{scale::UiScale, theme},
 };
@@ -37,6 +37,8 @@ mod display;
 mod keys;
 mod manager;
 mod notifications;
+#[cfg(feature = "rtt")]
+mod rtt_demo;
 mod target;
 mod util;
 mod window;
@@ -69,6 +71,10 @@ pub struct Args {
 
   #[options(help = "Open the configuration window")]
   config: bool,
+
+  #[cfg(feature = "rtt")]
+  #[options(help = "Stream scripted fake captions for UI development", no_short)]
+  rtt_demo: bool,
 
   #[options(help = "Target application to launch (if any)", free)]
   target: Vec<String>,
@@ -231,6 +237,22 @@ fn app() -> impl IntoElement {
     create_transport_thread(app.clone(), args.port, force_transport, transport_recv);
     create_notification_thread(app.clone());
 
+    #[cfg(feature = "rtt")]
+    if args.rtt_demo {
+      rtt_demo::spawn(app.clone());
+    }
+
+    // Re-render periodically while captions are on screen so finished lines fade out
+    let fade_app = app.clone();
+    std::thread::spawn(move || {
+      loop {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        if fade_app.read(|state| state.config.rtt_enabled && !state.transcript.is_empty()) {
+          fade_app.redraw();
+        }
+      }
+    });
+
     app.notify(Notification {
       title: format!(
         "Orbolay v{} (rev {})",
@@ -318,6 +340,7 @@ fn app() -> impl IntoElement {
   let voice_users = state.voice_users.clone();
   let messages = state.messages.clone();
   let messages_enabled = state.config.enable_message_notifications;
+  let transcript: Vec<_> = state.transcript.iter().cloned().collect();
   let is_open = state.is_open;
   let is_censor = state.is_censor;
   let config = state.config.clone();
@@ -384,6 +407,27 @@ fn app() -> impl IntoElement {
       messages_semitransparent: config.messages_semitransparent,
       notification_template: config.notification_template.clone(),
       app_state,
+      theme,
+      ui_scale,
+    }))
+    // Live captions
+    .maybe(config.rtt_enabled && !is_censor, |el| el.child(CaptionPanel {
+      lines: transcript,
+      is_open,
+      alignment: config
+        .rtt_alignment
+        .clone()
+        .unwrap_or_else(|| "bottomcenter".into()),
+      offset_x: config.rtt_offset_x,
+      offset_y: config.rtt_offset_y,
+      max_lines: config.rtt_max_lines,
+      fade_seconds: config.rtt_fade_seconds,
+      font_scale: config.rtt_font_scale,
+      show_avatars: config.rtt_show_avatars,
+      now_ms: std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or_default(),
       theme,
       ui_scale,
     }))

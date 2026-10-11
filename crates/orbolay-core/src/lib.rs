@@ -3,5 +3,6 @@ pub mod config;
 pub mod dirs;
 pub mod monitors;
 pub mod payloads;
+pub mod transcript;
 pub mod user;
 pub mod util;
