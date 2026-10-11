@@ -81,6 +81,18 @@ fn default_ui_scale() -> f32 {
   1.0
 }
 
+fn default_rtt_max_lines() -> usize {
+  6
+}
+
+fn default_rtt_fade_seconds() -> f32 {
+  8.
+}
+
+fn default_rtt_font_scale() -> f32 {
+  1.0
+}
+
 fn default_true() -> bool {
   true
 }
@@ -133,6 +145,22 @@ pub struct Config {
   pub user_template: Option<String>,
   #[serde(default)]
   pub notification_template: Option<String>,
+  #[serde(default)]
+  pub rtt_enabled: bool,
+  #[serde(default)]
+  pub rtt_alignment: Option<String>,
+  #[serde(default)]
+  pub rtt_offset_x: i32,
+  #[serde(default)]
+  pub rtt_offset_y: i32,
+  #[serde(default = "default_rtt_max_lines")]
+  pub rtt_max_lines: usize,
+  #[serde(default = "default_rtt_fade_seconds")]
+  pub rtt_fade_seconds: f32,
+  #[serde(default = "default_rtt_font_scale")]
+  pub rtt_font_scale: f32,
+  #[serde(default = "default_true")]
+  pub rtt_show_avatars: bool,
 }
 
 impl Default for Config {
@@ -161,6 +189,14 @@ impl Default for Config {
       ui_scale: default_ui_scale(),
       user_template: None,
       notification_template: None,
+      rtt_enabled: false,
+      rtt_alignment: None,
+      rtt_offset_x: 0,
+      rtt_offset_y: 0,
+      rtt_max_lines: default_rtt_max_lines(),
+      rtt_fade_seconds: default_rtt_fade_seconds(),
+      rtt_font_scale: default_rtt_font_scale(),
+      rtt_show_avatars: true,
     }
   }
 }
@@ -186,4 +222,20 @@ pub fn load_config() -> Option<Config> {
 
 pub fn is_first_run() -> bool {
   load_config().is_none()
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn old_config_gets_rtt_defaults() {
+    let config: Config = serde_json::from_str("{}").unwrap();
+    assert!(!config.rtt_enabled);
+    assert_eq!(config.rtt_max_lines, 6);
+    assert_eq!(config.rtt_fade_seconds, 8.);
+    assert_eq!(config.rtt_font_scale, 1.0);
+    assert!(config.rtt_show_avatars);
+    assert_eq!(config.rtt_alignment, None);
+  }
 }
