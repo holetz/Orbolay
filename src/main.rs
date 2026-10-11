@@ -37,6 +37,8 @@ mod display;
 mod keys;
 mod manager;
 mod notifications;
+#[cfg(feature = "rtt")]
+mod rtt_demo;
 mod target;
 mod util;
 mod window;
@@ -69,6 +71,10 @@ pub struct Args {
 
   #[options(help = "Open the configuration window")]
   config: bool,
+
+  #[cfg(feature = "rtt")]
+  #[options(help = "Stream scripted fake captions for UI development", no_short)]
+  rtt_demo: bool,
 
   #[options(help = "Target application to launch (if any)", free)]
   target: Vec<String>,
@@ -230,6 +236,11 @@ fn app() -> impl IntoElement {
 
     create_transport_thread(app.clone(), args.port, force_transport, transport_recv);
     create_notification_thread(app.clone());
+
+    #[cfg(feature = "rtt")]
+    if args.rtt_demo {
+      rtt_demo::spawn(app.clone());
+    }
 
     // Re-render periodically while captions are on screen so finished lines fade out
     let fade_app = app.clone();
