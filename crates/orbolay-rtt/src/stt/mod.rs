@@ -1,7 +1,9 @@
 //! Speech-to-text: the engine interface and the segments that flow through it.
 
+pub mod vad;
 pub mod whisper;
 
+pub use vad::{VadConfig, VadSegmenter};
 pub use whisper::{WhisperConfig, WhisperEngine};
 
 use std::fmt;
