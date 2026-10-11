@@ -3,8 +3,10 @@
 //! Nothing here runs on its own: [`download`] is only called from a button in the settings.
 
 use std::fs::{self, File};
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
 
 use sha2::{Digest, Sha256};
@@ -25,8 +27,10 @@ pub const KNOWN_MODELS: &[&str] = &[
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
-/// ureq has no per-read timeout, so this bounds the whole body (the largest model is ~490 MB).
+/// Bounds the whole body (the largest model is ~490 MB); a stall is caught sooner by [`STALL_TIMEOUT`].
 const BODY_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+/// ureq has no per-read timeout, so the body is aborted when no bytes arrive for this long.
+const STALL_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// SHA-256 of each known model, from the `lfs.oid` of
 /// `https://huggingface.co/api/models/ggerganov/whisper.cpp/tree/main`.
@@ -106,7 +110,7 @@ pub fn download(model: &str) -> Result<PathBuf, String> {
   let dir = target.parent().ok_or("invalid model path")?;
   fs::create_dir_all(dir).map_err(|e| e.to_string())?;
   let partial = target.with_extension("bin.part");
-  let result = fetch(&download_url(model), &partial)
+  let result = fetch(&download_url(model), &partial, STALL_TIMEOUT)
     .and_then(|()| verify_sha256(&partial, expected).map_err(|e| format!("{model}: {e}")));
   match result {
     Ok(()) => {
@@ -120,7 +124,11 @@ pub fn download(model: &str) -> Result<PathBuf, String> {
   }
 }
 
-fn fetch(url: &str, dest: &Path) -> Result<(), String> {
+/// Downloads `url` into `dest`, aborting when the body goes `stall` without a byte.
+///
+/// The blocking read happens in a worker thread, so the deadline holds even when that read never
+/// returns; the worker is left to end when the peer closes or the body cap fires.
+fn fetch(url: &str, dest: &Path, stall: Duration) -> Result<(), String> {
   let agent: ureq::Agent = ureq::Agent::config_builder()
     .timeout_connect(Some(CONNECT_TIMEOUT))
     .timeout_recv_response(Some(RESPONSE_TIMEOUT))
@@ -130,8 +138,34 @@ fn fetch(url: &str, dest: &Path) -> Result<(), String> {
   let response = agent.get(url).call().map_err(|e| e.to_string())?;
   let mut reader = response.into_body().into_reader();
   let mut file = File::create(dest).map_err(|e| e.to_string())?;
-  io::copy(&mut reader, &mut file).map_err(|e| e.to_string())?;
-  Ok(())
+  let (tx, rx) = mpsc::sync_channel::<io::Result<Vec<u8>>>(4);
+  thread::spawn(move || {
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+      let chunk = match reader.read(&mut buf) {
+        Ok(0) => break,
+        Ok(n) => Ok(buf[..n].to_vec()),
+        Err(e) => Err(e),
+      };
+      let failed = chunk.is_err();
+      if tx.send(chunk).is_err() || failed {
+        break;
+      }
+    }
+  });
+  loop {
+    match rx.recv_timeout(stall) {
+      Ok(Ok(chunk)) => file.write_all(&chunk).map_err(|e| e.to_string())?,
+      Ok(Err(e)) => return Err(e.to_string()),
+      Err(mpsc::RecvTimeoutError::Timeout) => {
+        return Err(format!(
+          "download stalled: no data for {}s",
+          stall.as_secs()
+        ));
+      }
+      Err(mpsc::RecvTimeoutError::Disconnected) => return Ok(()),
+    }
+  }
 }
 
 #[cfg(test)]
@@ -212,5 +246,36 @@ mod tests {
   #[test]
   fn missing_model_is_not_installed() {
     assert!(!is_installed("definitely-not-a-model-xyz"));
+  }
+
+  #[test]
+  fn stalled_download_aborts_instead_of_hanging() {
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/model.bin", listener.local_addr().unwrap());
+    let server = thread::spawn(move || {
+      let (mut conn, _) = listener.accept().unwrap();
+      let mut req = [0u8; 1024];
+      let _ = conn.read(&mut req);
+      conn
+        .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1000000\r\n\r\npartial")
+        .unwrap();
+      // Stall with the connection open until the test is over.
+      thread::sleep(Duration::from_secs(8));
+    });
+    let dest = std::env::temp_dir().join(format!("orbolay-stall-test-{}.bin", std::process::id()));
+    let (done_tx, done_rx) = mpsc::channel();
+    let guard_dest = dest.clone();
+    thread::spawn(move || {
+      let _ = done_tx.send(fetch(&url, &guard_dest, Duration::from_millis(500)));
+    });
+    let result = done_rx
+      .recv_timeout(Duration::from_secs(5))
+      .expect("fetch still blocked 5s after the body stalled");
+    let err = result.unwrap_err();
+    assert!(err.contains("stalled"), "{err}");
+    let _ = fs::remove_file(&dest);
+    drop(server);
   }
 }
