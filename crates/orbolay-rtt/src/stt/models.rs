@@ -2,6 +2,7 @@
 //!
 //! Nothing here runs on its own: [`download`] is only called from a button in the settings.
 
+use std::fmt;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -10,6 +11,10 @@ use std::thread;
 use std::time::Duration;
 
 use sha2::{Digest, Sha256};
+use ureq::unversioned::resolver::DefaultResolver;
+use ureq::unversioned::transport::{
+  Buffers, ConnectionDetails, Connector, DefaultConnector, NextTimeout, Transport,
+};
 
 use crate::pipeline::model_path;
 
@@ -124,17 +129,84 @@ pub fn download(model: &str) -> Result<PathBuf, String> {
   }
 }
 
+/// ureq has no per-read timeout, so a connector clamps every socket read to the stall window plus
+/// a margin (so the stall deadline in `fetch` reports first).
+/// A stalled read then errors out, ending the reader thread and dropping its socket.
+#[derive(Debug)]
+struct PerReadTimeout {
+  inner: DefaultConnector,
+  read: Duration,
+}
+
+impl Connector for PerReadTimeout {
+  type Out = Box<dyn Transport>;
+
+  fn connect(
+    &self,
+    details: &ConnectionDetails,
+    chained: Option<()>,
+  ) -> Result<Option<Self::Out>, ureq::Error> {
+    Ok(self.inner.connect(details, chained)?.map(|inner| {
+      Box::new(ClampedRead {
+        inner,
+        read: self.read,
+      }) as Box<dyn Transport>
+    }))
+  }
+}
+
+struct ClampedRead {
+  inner: Box<dyn Transport>,
+  read: Duration,
+}
+
+impl fmt::Debug for ClampedRead {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.debug_struct("ClampedRead").finish_non_exhaustive()
+  }
+}
+
+impl Transport for ClampedRead {
+  fn buffers(&mut self) -> &mut dyn Buffers {
+    self.inner.buffers()
+  }
+
+  fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), ureq::Error> {
+    self.inner.transmit_output(amount, timeout)
+  }
+
+  fn await_input(&mut self, mut timeout: NextTimeout) -> Result<bool, ureq::Error> {
+    timeout.after = timeout
+      .after
+      .min(ureq::unversioned::transport::time::Duration::Exact(
+        self.read,
+      ));
+    self.inner.await_input(timeout)
+  }
+
+  fn is_open(&mut self) -> bool {
+    self.inner.is_open()
+  }
+}
+
 /// Downloads `url` into `dest`, aborting when the body goes `stall` without a byte.
 ///
 /// The blocking read happens in a worker thread, so the deadline holds even when that read never
-/// returns; the worker is left to end when the peer closes or the body cap fires.
+/// returns; the clamped per-read timeout ends the worker, dropping its socket, within one stall window.
 fn fetch(url: &str, dest: &Path, stall: Duration) -> Result<(), String> {
-  let agent: ureq::Agent = ureq::Agent::config_builder()
+  let config = ureq::Agent::config_builder()
     .timeout_connect(Some(CONNECT_TIMEOUT))
     .timeout_recv_response(Some(RESPONSE_TIMEOUT))
     .timeout_recv_body(Some(BODY_TIMEOUT))
-    .build()
-    .into();
+    .build();
+  let agent = ureq::Agent::with_parts(
+    config,
+    PerReadTimeout {
+      inner: DefaultConnector::default(),
+      read: stall + Duration::from_secs(1),
+    },
+    DefaultResolver::default(),
+  );
   let response = agent.get(url).call().map_err(|e| e.to_string())?;
   let mut reader = response.into_body().into_reader();
   let mut file = File::create(dest).map_err(|e| e.to_string())?;
@@ -277,5 +349,45 @@ mod tests {
     assert!(err.contains("stalled"), "{err}");
     let _ = fs::remove_file(&dest);
     drop(server);
+  }
+
+  #[test]
+  fn stalled_download_releases_its_socket() {
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/model.bin", listener.local_addr().unwrap());
+    let (closed_tx, closed_rx) = mpsc::channel();
+    let server = thread::spawn(move || {
+      let (mut conn, _) = listener.accept().unwrap();
+      let mut req = [0u8; 1024];
+      let _ = conn.read(&mut req);
+      conn
+        .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1000000\r\n\r\npartial")
+        .unwrap();
+      // Wait for the client to close its end (EOF or reset), never sending more.
+      conn
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .unwrap();
+      let closed = match conn.read(&mut req) {
+        Ok(n) => n == 0,
+        Err(e) => !matches!(
+          e.kind(),
+          io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+        ),
+      };
+      let _ = closed_tx.send(closed);
+    });
+    let dest =
+      std::env::temp_dir().join(format!("orbolay-release-test-{}.bin", std::process::id()));
+    let err = fetch(&url, &dest, Duration::from_millis(500)).unwrap_err();
+    assert!(err.contains("stalled"), "{err}");
+    let released = closed_rx.recv_timeout(Duration::from_secs(4));
+    assert!(
+      matches!(released, Ok(true)),
+      "client socket still open 4s after the stall deadline: {released:?}"
+    );
+    let _ = fs::remove_file(&dest);
+    let _ = server.join();
   }
 }
