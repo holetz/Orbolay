@@ -99,7 +99,11 @@ impl VadSegmenter {
   /// Feeds a 16 kHz mono frame; returns the provisional and final segments it completed.
   pub fn push(&mut self, frame: &AudioFrame) -> Vec<AudioSegment> {
     debug_assert_eq!((frame.sample_rate, frame.channels), (TARGET_RATE, 1));
-    if self.pending.is_empty() {
+    // A frame starting later than the pending samples end means input was dropped: the partial
+    // window straddles the gap, so it is discarded and the clock re-anchored to the frame.
+    let expected = self.pending_start + duration_of(self.pending.len());
+    if self.pending.is_empty() || frame.timestamp > expected + duration_of(self.window) {
+      self.pending.clear();
       self.pending_start = frame.timestamp;
     }
     self.pending.extend_from_slice(&frame.samples);
@@ -340,5 +344,75 @@ mod tests {
     out.extend(feed(&mut vad, 0.1, 2., false));
     out.extend(vad.flush());
     assert!(out.is_empty());
+  }
+
+  /// Pushes 10 ms blocks of 48 kHz stereo from `t0` through the resampler into the segmenter.
+  fn feed_48k(
+    resampler: &mut crate::audio::MonoResampler,
+    vad: &mut VadSegmenter,
+    t0: f64,
+    secs: f64,
+    tone: bool,
+  ) -> Vec<AudioSegment> {
+    let mut out = Vec::new();
+    for b in 0..(secs * 100.) as usize {
+      let first = b * 480;
+      let samples = (first..first + 480)
+        .flat_map(|i| {
+          let t = i as f32 / 48_000.;
+          let s = if tone {
+            0.3 * (t * 440. * std::f32::consts::TAU).sin()
+          } else {
+            0.001 * (t * 50. * std::f32::consts::TAU).sin()
+          };
+          [s, s]
+        })
+        .collect();
+      let frame = AudioFrame {
+        timestamp: Duration::from_secs_f64(t0 + b as f64 / 100.),
+        sample_rate: 48_000,
+        channels: 2,
+        samples,
+      };
+      if let Some(mono) = resampler.process(&frame).unwrap() {
+        out.extend(vad.push(&mono));
+      }
+    }
+    out
+  }
+
+  #[test]
+  fn segment_start_reanchors_after_a_gap_at_48k_stereo() {
+    let mut resampler = crate::audio::MonoResampler::default();
+    let mut vad = VadSegmenter::new(VadConfig::default());
+    let mut out = feed_48k(&mut resampler, &mut vad, 0., 1., false);
+    // Frames dropped: input jumps from 1 s to 5 s; speech really starts at 5.5 s.
+    out.extend(feed_48k(&mut resampler, &mut vad, 5., 0.5, false));
+    out.extend(feed_48k(&mut resampler, &mut vad, 5.5, 1.5, true));
+    out.extend(feed_48k(&mut resampler, &mut vad, 7., 1., false));
+    out.extend(vad.flush());
+
+    let fin = out
+      .iter()
+      .find(|s| s.is_final && !s.samples.is_empty())
+      .expect("a final utterance");
+    let start = fin.start.as_secs_f64();
+    assert!(
+      (5.2..=5.55).contains(&start),
+      "speech really starts at 5500ms; final start={start}s"
+    );
+  }
+
+  #[test]
+  fn reanchor_does_not_split_a_contiguous_stream() {
+    let mut resampler = crate::audio::MonoResampler::default();
+    let mut vad = VadSegmenter::new(VadConfig::default());
+    let mut out = feed_48k(&mut resampler, &mut vad, 0., 0.5, false);
+    out.extend(feed_48k(&mut resampler, &mut vad, 0.5, 1.5, true));
+    out.extend(feed_48k(&mut resampler, &mut vad, 2., 1., false));
+    let finals: Vec<_> = out.iter().filter(|s| s.is_final).collect();
+    assert_eq!(finals.len(), 1);
+    let start = finals[0].start.as_secs_f64();
+    assert!((0.2..=0.55).contains(&start), "start={start}s");
   }
 }
