@@ -533,7 +533,108 @@ fn configurator(app: AppHandle, standalone: bool) -> impl IntoElement {
           },
         ))
       }
+    });
+
+  #[cfg(feature = "rtt")]
+  let inner = inner
+    .child(divider())
+    .child(SettingRow {
+      name: "Live Captions".into(),
+      description: Some("Show a live transcript of voice chat on the overlay".into()),
+      kind: SettingKind::Toggle(config.rtt_enabled),
+      on_change: make_bool_updater(app.clone(), local_config, |cfg, value| {
+        cfg.rtt_enabled = value;
+      }),
+      disabled: false,
     })
+    .child(divider())
+    .child(SettingRow {
+      name: "Captions Alignment".into(),
+      description: Some("Screen position for live captions".into()),
+      kind: SettingKind::Dropdown(
+        ALIGNMENTS.iter().map(|s| s.to_string()).collect(),
+        config
+          .rtt_alignment
+          .clone()
+          .or_else(|| Some("bottomcenter".into())),
+      ),
+      on_change: make_updater(app.clone(), local_config, |cfg, v| {
+        cfg.rtt_alignment = Some(v);
+      }),
+      disabled: false,
+    })
+    .child(divider())
+    .child(SettingRow {
+      name: "Captions X Offset (px)".into(),
+      description: None,
+      kind: SettingKind::Input(Some(config.rtt_offset_x.to_string())),
+      on_change: make_updater(app.clone(), local_config, |cfg, v| {
+        if let Ok(n) = v.trim().parse::<i32>() {
+          cfg.rtt_offset_x = n;
+        }
+      }),
+      disabled: false,
+    })
+    .child(divider())
+    .child(SettingRow {
+      name: "Captions Y Offset (px)".into(),
+      description: None,
+      kind: SettingKind::Input(Some(config.rtt_offset_y.to_string())),
+      on_change: make_updater(app.clone(), local_config, |cfg, v| {
+        if let Ok(n) = v.trim().parse::<i32>() {
+          cfg.rtt_offset_y = n;
+        }
+      }),
+      disabled: false,
+    })
+    .child(divider())
+    .child(SettingRow {
+      name: "Captions Max Lines".into(),
+      description: Some("How many caption lines are kept on screen".into()),
+      kind: SettingKind::Input(Some(config.rtt_max_lines.to_string())),
+      on_change: make_updater(app.clone(), local_config, |cfg, v| {
+        if let Ok(n) = v.trim().parse::<usize>() {
+          cfg.rtt_max_lines = n.clamp(1, 50);
+        }
+      }),
+      disabled: false,
+    })
+    .child(divider())
+    .child(SettingRow {
+      name: "Captions Fade (seconds)".into(),
+      description: Some("How long a caption stays once the overlay is closed".into()),
+      kind: SettingKind::Input(Some(config.rtt_fade_seconds.to_string())),
+      on_change: make_updater(app.clone(), local_config, |cfg, v| {
+        if let Ok(n) = v.trim().parse::<f32>() {
+          cfg.rtt_fade_seconds = n.max(0.);
+        }
+      }),
+      disabled: false,
+    })
+    .child(divider())
+    .child(SettingRow {
+      name: "Captions Font Scale".into(),
+      description: None,
+      kind: SettingKind::Input(Some(config.rtt_font_scale.to_string())),
+      on_change: make_updater(app.clone(), local_config, |cfg, v| {
+        if let Ok(n) = v.trim().parse::<f32>() {
+          cfg.rtt_font_scale = n.clamp(0.5, 3.0);
+        }
+      }),
+      disabled: false,
+    })
+    .child(divider())
+    .child(SettingRow {
+      name: "Captions Speaker Badges".into(),
+      description: Some("Show a coloured badge next to each speaker".into()),
+      kind: SettingKind::Toggle(config.rtt_show_avatars),
+      on_change: make_bool_updater(app.clone(), local_config, |cfg, value| {
+        cfg.rtt_show_avatars = value;
+      }),
+      disabled: false,
+    });
+
+  let inner = inner
     .child(wide_button("Reset to Defaults", RED, {
       let app = app.clone();
       move |_| {
