@@ -6,6 +6,7 @@ rust-version = "1.95"
 description = "Audio capture pipeline for Orbolay live captions"
 
 [dependencies]
+cpal = "0.17"
 flume = { workspace = true }
 orbolay-core = { path = "../orbolay-core" }
 

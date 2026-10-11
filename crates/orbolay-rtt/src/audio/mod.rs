@@ -2,9 +2,11 @@
 
 #[cfg(target_os = "linux")]
 mod loopback_linux;
+mod mic;
 
 #[cfg(target_os = "linux")]
 pub use loopback_linux::LoopbackSource;
+pub use mic::MicSource;
 
 use std::fmt;
 use std::time::{Duration, Instant};
