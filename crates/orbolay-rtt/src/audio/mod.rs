@@ -1,5 +1,11 @@
 //! Audio sources and the shared pipeline clock.
 
+#[cfg(target_os = "linux")]
+mod loopback_linux;
+
+#[cfg(target_os = "linux")]
+pub use loopback_linux::LoopbackSource;
+
 use std::fmt;
 use std::time::{Duration, Instant};
 
