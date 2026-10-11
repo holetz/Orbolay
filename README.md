@@ -221,6 +221,27 @@ hl.window_rule({
 2. `cargo build --release`
 3. Binaries will be in `target/release/`
 
+## Live captions (`--features rtt`) on Linux
+
+The `rtt` feature adds the `orbolay-rtt` audio capture crate, which links ALSA through `cpal`:
+
+* Build: `libasound2-dev` (Debian/Ubuntu), `alsa-lib-devel` (Fedora) or `alsa-lib` (Arch), plus
+  `pkg-config`. The crate is a workspace member, so `cargo build --workspace` / `cargo clippy --workspace`
+  need it even without the feature.
+* Runtime: the ALSA PulseAudio plugin (`libasound2-plugins` on Debian/Ubuntu, `alsa-plugins-pulseaudio`
+  on Fedora/Arch), which captures what Discord plays from the default sink's monitor on both
+  PulseAudio and PipeWire (`pipewire-pulse`). No `libpulse` headers are needed.
+
+```sh
+cargo build --release --features rtt
+# Check capture: writes rtt-mic.wav and rtt-loopback.wav (16 kHz mono) after 10 s
+cargo run -p orbolay-rtt --example rtt-capture-test
+```
+
+`rttMicDevice` and `rttLoopbackDevice` in the config file pick a non-default microphone (device name)
+or loopback source (a PulseAudio source such as `<sink>.monitor`, listed by
+`pactl list short sources | grep monitor`).
+
 # Special Thanks
 
 * [Freya](https://github.com/marc2332/freya) - the main GUI library (that I may have fallen in love with)
