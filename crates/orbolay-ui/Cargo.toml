@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.95"
 
 [features]
-rtt = ["dep:orbolay-rtt"]
+rtt = ["dep:orbolay-rtt", "orbolay-rtt/capture"]
 
 [dependencies]
 bytes = { workspace = true }

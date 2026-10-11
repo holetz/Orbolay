@@ -6,21 +6,29 @@ rust-version = "1.95"
 description = "Audio capture pipeline for Orbolay live captions"
 
 [dependencies]
-audioadapter-buffers = "2"
-cpal = "0.17"
+audioadapter-buffers = { version = "2", optional = true }
+cpal = { version = "0.17", optional = true }
 flume = { workspace = true }
 orbolay-core = { path = "../orbolay-core" }
-rubato = "1"
+rubato = { version = "1", optional = true }
 ureq = { workspace = true }
-whisper-rs = "0.16"
+whisper-rs = { version = "0.16", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-alsa = "0.11"
+alsa = { version = "0.11", optional = true }
 
 [features]
+# The audio capture and speech-to-text stack (cpal, ALSA, whisper). Off by default so a plain
+# `cargo build/clippy/test --workspace` never compiles alsa-sys or whisper-rs-sys; the root `rtt`
+# feature turns it on.
+capture = ["dep:audioadapter-buffers", "dep:cpal", "dep:rubato", "dep:whisper-rs", "dep:alsa"]
 # Runs tests that load a real speech model; never part of the default test run.
 test-model = []
 
 [[test]]
 name = "transcribe"
-required-features = ["test-model"]
+required-features = ["capture", "test-model"]
+
+[[example]]
+name = "rtt-capture-test"
+required-features = ["capture"]
