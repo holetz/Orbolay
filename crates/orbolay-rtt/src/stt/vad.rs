@@ -7,6 +7,7 @@
 //! `max_utterance`.
 
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use super::AudioSegment;
@@ -57,6 +58,10 @@ fn rms(window: &[f32]) -> f32 {
   (window.iter().map(|s| s * s).sum::<f32>() / window.len().max(1) as f32).sqrt()
 }
 
+/// Utterance ids are unique for the life of the process: a rebuilt pipeline must never reuse an id
+/// whose caption line is still in the transcript.
+static NEXT_UTTERANCE: AtomicU64 = AtomicU64::new(1);
+
 struct Utterance {
   id: u64,
   start: Duration,
@@ -75,7 +80,6 @@ pub struct VadSegmenter {
   pending_start: Duration,
   pre_roll: VecDeque<f32>,
   current: Option<Utterance>,
-  next_id: u64,
 }
 
 impl VadSegmenter {
@@ -87,7 +91,6 @@ impl VadSegmenter {
       pending_start: Duration::ZERO,
       pre_roll: VecDeque::new(),
       current: None,
-      next_id: 1,
       config,
     }
   }
@@ -131,14 +134,13 @@ impl VadSegmenter {
         let utt_start = start.saturating_sub(duration_of(samples.len()));
         samples.extend_from_slice(window);
         self.current = Some(Utterance {
-          id: self.next_id,
+          id: NEXT_UTTERANCE.fetch_add(1, Ordering::Relaxed),
           start: utt_start,
           samples,
           voiced: window.len(),
           silence_run: 0,
           next_partial: samples_in(self.config.partial_every),
         });
-        self.next_id += 1;
       } else {
         self.noise_floor = 0.95 * self.noise_floor + 0.05 * level;
         self.pre_roll.extend(window);
@@ -218,6 +220,22 @@ mod tests {
       }));
     }
     out
+  }
+
+  #[test]
+  fn utterance_ids_are_unique_across_segmenters() {
+    let first_id = |vad: &mut VadSegmenter| {
+      let mut out = feed(vad, 0., 3.5, true);
+      out.extend(feed(vad, 3.5, 1., false));
+      out
+        .iter()
+        .find(|s| s.is_final)
+        .expect("a final segment")
+        .utterance
+    };
+    let a = first_id(&mut VadSegmenter::new(VadConfig::default()));
+    let b = first_id(&mut VadSegmenter::new(VadConfig::default()));
+    assert_ne!(a, b, "a restarted pipeline must not reuse utterance ids");
   }
 
   #[test]
