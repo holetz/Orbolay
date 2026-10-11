@@ -69,6 +69,7 @@ struct Utterance {
   voiced: usize,
   silence_run: usize,
   next_partial: usize,
+  partial_sent: bool,
 }
 
 pub struct VadSegmenter {
@@ -140,6 +141,7 @@ impl VadSegmenter {
           voiced: window.len(),
           silence_run: 0,
           next_partial: samples_in(self.config.partial_every),
+          partial_sent: false,
         });
       } else {
         self.noise_floor = 0.95 * self.noise_floor + 0.05 * level;
@@ -168,6 +170,7 @@ impl VadSegmenter {
 
     if utt.samples.len() >= utt.next_partial {
       utt.next_partial += samples_in(self.config.partial_every);
+      utt.partial_sent = true;
       return Some(AudioSegment {
         utterance: utt.id,
         start: utt.start,
@@ -178,12 +181,15 @@ impl VadSegmenter {
     None
   }
 
+  /// A dropped utterance that already showed a provisional still closes, with an empty final that
+  /// tells the consumer to remove its line; one that never did leaves nothing behind.
   fn close(&mut self) -> Option<AudioSegment> {
     let utt = self.current.take()?;
-    (utt.voiced >= samples_in(self.config.min_speech)).then_some(AudioSegment {
+    let kept = utt.voiced >= samples_in(self.config.min_speech);
+    (kept || utt.partial_sent).then(|| AudioSegment {
       utterance: utt.id,
       start: utt.start,
-      samples: utt.samples,
+      samples: if kept { utt.samples } else { Vec::new() },
       is_final: true,
     })
   }
@@ -285,6 +291,54 @@ mod tests {
     let mut vad = VadSegmenter::new(VadConfig::default());
     let mut out = feed(&mut vad, 0., 0.1, true);
     out.extend(feed(&mut vad, 0.1, 2., false));
+    assert!(out.is_empty());
+  }
+
+  /// Six 10 ms clicks, each followed by 400 ms of silence: enough to reach a provisional segment,
+  /// never enough voiced audio to survive `min_speech`.
+  fn clicks(vad: &mut VadSegmenter) -> Vec<AudioSegment> {
+    let mut out = Vec::new();
+    let frame = RATE / 100;
+    let mut t = 0.;
+    for _ in 0..6 {
+      let click = (0..frame)
+        .map(|i| if i % 2 == 0 { 0.5 } else { -0.5 })
+        .collect();
+      out.extend(vad.push(&AudioFrame {
+        timestamp: Duration::from_secs_f64(t),
+        sample_rate: TARGET_RATE,
+        channels: 1,
+        samples: click,
+      }));
+      out.extend(feed(vad, t + 0.01, 0.4, false));
+      t += 0.41;
+    }
+    out
+  }
+
+  #[test]
+  fn dropped_utterance_with_a_provisional_ends_with_an_empty_final() {
+    let mut vad = VadSegmenter::new(VadConfig::default());
+    let mut out = clicks(&mut vad);
+    out.extend(vad.flush());
+
+    let partial = out.iter().find(|s| !s.is_final).expect("a provisional");
+    let fin = out
+      .iter()
+      .find(|s| s.is_final && s.utterance == partial.utterance)
+      .expect("every provisional utterance is finalised");
+    assert!(
+      fin.samples.is_empty(),
+      "a dropped utterance finalises as a discard"
+    );
+  }
+
+  #[test]
+  fn dropped_utterance_without_a_provisional_emits_nothing() {
+    let mut vad = VadSegmenter::new(VadConfig::default());
+    let mut out = feed(&mut vad, 0., 0.1, true);
+    out.extend(feed(&mut vad, 0.1, 2., false));
+    out.extend(vad.flush());
     assert!(out.is_empty());
   }
 }
