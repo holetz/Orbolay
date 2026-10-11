@@ -9,12 +9,13 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use orbolay_core::app_state::AppHandle;
 use orbolay_core::config::{Config, config_dir};
 use orbolay_core::transcript::{TranscriptLine, TranscriptSource};
 
+use crate::attribution::attribute_loopback;
 #[cfg(target_os = "linux")]
 use crate::audio::LoopbackSource;
 use crate::audio::{AudioSource, Epoch, MicSource, MonoResampler};
@@ -111,6 +112,7 @@ impl Pipeline {
   pub fn start(config: &PipelineConfig, app: AppHandle) -> Result<(Self, Vec<String>), String> {
     let engine = WhisperEngine::new(&config.whisper).map_err(|e| e.to_string())?;
     let epoch = Epoch::now();
+    let origin = Instant::now();
     let wall_origin = SystemTime::now();
 
     let mut candidates: Vec<(TranscriptSource, Box<dyn AudioSource>)> = vec![(
@@ -150,7 +152,7 @@ impl Pipeline {
     }
 
     pipeline.threads.push(std::thread::spawn(move || {
-      run_engine(engine, &queue, &stop, &app, wall_origin)
+      run_engine(engine, &queue, &stop, &app, wall_origin, origin)
     }));
     Ok((pipeline, warnings))
   }
@@ -202,6 +204,7 @@ fn run_engine(
   stop: &AtomicBool,
   app: &AppHandle,
   wall_origin: SystemTime,
+  origin: Instant,
 ) {
   while !stop.load(Ordering::Relaxed) {
     let Some(job) = queue.pop(POLL) else {
@@ -216,7 +219,17 @@ fn run_engine(
       .collect::<Vec<_>>()
       .join(" ");
     app.update(|state| {
-      let (speaker_id, speaker_name) = speaker(job.source, &state.user_id, &state.voice_users);
+      let (speaker_id, speaker_name) = match job.source {
+        TranscriptSource::Mic => speaker(job.source, &state.user_id, &state.voice_users),
+        TranscriptSource::Loopback => attribute_loopback(
+          &state.speaking,
+          &state.voice_users,
+          &state.user_id,
+          origin + job.segment.start,
+          origin + job.segment.end(),
+          state.config.rtt_event_offset_ms,
+        ),
+      };
       let line = transcript_line(&job, text, speaker_id, speaker_name, wall_origin);
       if line.text.is_empty() {
         // Nothing recognised: drop the provisional line this utterance may have left behind.
@@ -230,7 +243,7 @@ fn run_engine(
   }
 }
 
-/// Unattributed at this stage: the mic is the local user, loopback is "Unknown".
+/// The mic is always the local user; loopback is attributed from the speaking timeline.
 fn speaker(
   source: TranscriptSource,
   user_id: &str,

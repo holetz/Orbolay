@@ -186,6 +186,9 @@ pub struct Config {
   /// Threads the speech engine may use; `None` picks from the available cores.
   #[serde(default)]
   pub rtt_threads: Option<usize>,
+  /// Shifts Discord speaking events (ms) to line them up with the captured audio.
+  #[serde(default)]
+  pub rtt_event_offset_ms: i32,
 }
 
 impl Default for Config {
@@ -227,6 +230,7 @@ impl Default for Config {
       rtt_model: default_rtt_model(),
       rtt_language: default_rtt_language(),
       rtt_threads: None,
+      rtt_event_offset_ms: 0,
     }
   }
 }
@@ -272,5 +276,6 @@ mod tests {
     assert_eq!(config.rtt_model, DEFAULT_RTT_MODEL);
     assert_eq!(config.rtt_language, "auto");
     assert_eq!(config.rtt_threads, None);
+    assert_eq!(config.rtt_event_offset_ms, 0);
   }
 }
