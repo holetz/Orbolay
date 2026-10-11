@@ -26,11 +26,15 @@ const QUEUE_CAP: usize = 8;
 const POLL: Duration = Duration::from_millis(100);
 
 /// Resolves `rttModel`: an existing path is used as is, anything else names
-/// `<config dir>/models/<name>.bin`.
+/// `<config dir>/models/<name>.bin`. A name that is not a single plain file name (separators,
+/// `..`, empty) never builds a path, so it cannot point outside the models directory.
 pub fn model_path(model: &str) -> Option<PathBuf> {
   let as_path = PathBuf::from(model);
   if as_path.is_file() {
     return Some(as_path);
+  }
+  if !is_bare_name(model) {
+    return None;
   }
   let file = if model.ends_with(".bin") {
     model.to_string()
@@ -38,6 +42,14 @@ pub fn model_path(model: &str) -> Option<PathBuf> {
     format!("{model}.bin")
   };
   Some(config_dir()?.join("models").join(file))
+}
+
+/// A single normal path component: no separators, no `.`/`..`, not empty.
+pub fn is_bare_name(name: &str) -> bool {
+  let mut parts = std::path::Path::new(name).components();
+  matches!(parts.next(), Some(std::path::Component::Normal(_)))
+    && parts.next().is_none()
+    && !name.contains(['/', '\\'])
 }
 
 /// Everything the pipeline is started from; a change to any of it restarts the pipeline.
