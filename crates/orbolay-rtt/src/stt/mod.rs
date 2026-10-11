@@ -1,5 +1,9 @@
 //! Speech-to-text: the engine interface and the segments that flow through it.
 
+pub mod whisper;
+
+pub use whisper::{WhisperConfig, WhisperEngine};
+
 use std::fmt;
 use std::time::Duration;
 

@@ -647,6 +647,26 @@ checksum = "d3c3baedf037b161e69da9200947329f52afa3b6e1cdbe6f344d6aa350fedd2f"
 
 [[package]]
 name = "bindgen"
+version = "0.72.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "993776b509cfb49c750f11b8f07a46fa23e0a1386ffc01fb1e7d343efc387895"
+dependencies = [
+ "bitflags 2.13.2",
+ "cexpr",
+ "clang-sys",
+ "itertools 0.13.0",
+ "log",
+ "prettyplease 0.2.37",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash",
+ "shlex 1.3.0",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "bindgen"
 version = "0.73.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "787ef8ef523575546b106a58213d6e6b06198a05c2f757258c68a74273670cfa"
@@ -655,12 +675,12 @@ dependencies = [
  "cexpr",
  "clang-sys",
  "log",
- "prettyplease",
+ "prettyplease 0.3.0",
  "proc-macro2",
  "quote",
  "regex",
  "rustc-hash",
- "shlex",
+ "shlex 2.0.1",
  "syn 3.0.6",
 ]
 
@@ -965,7 +985,7 @@ dependencies = [
  "find-msvc-tools",
  "jobserver",
  "libc",
- "shlex",
+ "shlex 2.0.1",
 ]
 
 [[package]]
@@ -1046,6 +1066,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bde03770d3df201d4fb868f2c9c59e66a3e4e2bd06692a0fe701e7103c7e84d4"
 dependencies = [
  "error-code",
+]
+
+[[package]]
+name = "cmake"
+version = "0.1.58"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0f78a02292a74a88ac736019ab962ece0bc380e3f977bf72e376c5d78ff0678"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -2120,7 +2149,7 @@ dependencies = [
  "futures-util",
  "generational-box",
  "hotpath",
- "itertools",
+ "itertools 0.14.0",
  "keyboard-types 0.8.3",
  "mundy",
  "paste",
@@ -2208,7 +2237,7 @@ version = "0.100.0-beta.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab63f601c617af7bd05abdf71f504577f77760ef12b281f5ab06078d301a6636"
 dependencies = [
- "bindgen",
+ "bindgen 0.73.2",
  "cc",
  "flate2",
  "heck",
@@ -2283,6 +2312,12 @@ dependencies = [
  "windows-sys 0.60.2",
  "winit",
 ]
+
+[[package]]
+name = "fs_extra"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
 name = "fsevent-sys"
@@ -3092,6 +3127,15 @@ checksum = "173609498df190136aa7dea1a91db051746d339e18476eed5ca40521f02d7aa5"
 dependencies = [
  "is-docker",
  "once_cell",
+]
+
+[[package]]
+name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
 ]
 
 [[package]]
@@ -4312,6 +4356,7 @@ dependencies = [
  "flume",
  "orbolay-core",
  "rubato",
+ "whisper-rs",
 ]
 
 [[package]]
@@ -4644,6 +4689,16 @@ checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
 name = "prettyplease"
+version = "0.2.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
+dependencies = [
+ "proc-macro2",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "prettyplease"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2bfe0f4c752e450fc2faf62654f1c134747922825d5b04ca717b8874f41a40c0"
@@ -4835,7 +4890,7 @@ source = "git+https://github.com/marc2332/freya.git?branch=feat%2Fhtml-viewer-ca
 dependencies = [
  "euclid",
  "hashbrown 0.16.1",
- "itertools",
+ "itertools 0.14.0",
  "rustc-hash",
  "tracing",
 ]
@@ -4911,7 +4966,7 @@ dependencies = [
  "built",
  "cfg-if",
  "interpolate_name",
- "itertools",
+ "itertools 0.14.0",
  "libc",
  "libfuzzer-sys",
  "log",
@@ -5534,6 +5589,12 @@ dependencies = [
 
 [[package]]
 name = "shlex"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
+
+[[package]]
+name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
@@ -5857,7 +5918,7 @@ dependencies = [
  "euclid",
  "icu_segmenter",
  "indexmap",
- "itertools",
+ "itertools 0.14.0",
  "itoa",
  "log",
  "malloc_size_of_derive",
@@ -6387,7 +6448,7 @@ version = "0.5.0-rc.9"
 source = "git+https://github.com/marc2332/freya.git?branch=feat%2Fhtml-viewer-cache#db7503276e93f52932465865afa8a84a9ff1accf"
 dependencies = [
  "euclid",
- "itertools",
+ "itertools 0.14.0",
  "rustc-hash",
  "tracing",
 ]
@@ -6686,7 +6747,7 @@ version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "80a7e511ce1795821207a837b7b1c8d8aca0c648810966ad200446ae58f6667f"
 dependencies = [
- "itertools",
+ "itertools 0.14.0",
  "nom 8.0.0",
 ]
 
@@ -6999,6 +7060,28 @@ dependencies = [
  "env_home",
  "rustix 1.1.5",
  "winsafe",
+]
+
+[[package]]
+name = "whisper-rs"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2088172d00f936c348d6a72f488dc2660ab3f507263a195df308a3c2383229f6"
+dependencies = [
+ "whisper-rs-sys",
+]
+
+[[package]]
+name = "whisper-rs-sys"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6986c0fe081241d391f09b9a071fbcbb59720c3563628c3c829057cf69f2a56f"
+dependencies = [
+ "bindgen 0.72.1",
+ "cfg-if",
+ "cmake",
+ "fs_extra",
+ "semver",
 ]
 
 [[package]]
