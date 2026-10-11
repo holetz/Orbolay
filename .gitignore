@@ -5,3 +5,6 @@
 
 # Generated in CI (build.yml generate-sources job)
 /flatpak/cargo-sources.json
+
+# quenching specs worktrees (fork-only, never upstreamed)
+.claude/worktrees/
