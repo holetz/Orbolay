@@ -1,0 +1,10 @@
+[package]
+name = "orbolay-rtt"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Audio capture pipeline for Orbolay live captions"
+
+[dependencies]
+flume = { workspace = true }
+orbolay-core = { path = "../orbolay-core" }

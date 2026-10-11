@@ -4076,6 +4076,7 @@ dependencies = [
  "orbolay-core",
  "orbolay-keys",
  "orbolay-logging",
+ "orbolay-rtt",
  "orbolay-transport",
  "orbolay-ui",
  "rdev",
@@ -4110,6 +4111,14 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "colored",
+]
+
+[[package]]
+name = "orbolay-rtt"
+version = "0.1.0"
+dependencies = [
+ "flume",
+ "orbolay-core",
 ]
 
 [[package]]
