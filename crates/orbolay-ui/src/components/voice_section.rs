@@ -12,7 +12,7 @@ use orbolay_core::{
 use crate::{
   components::UserRow,
   config::{AxisAlignment, CornerAlignment},
-  util::{scale::UiScale, theme::Theme},
+  util::{scale::UiScale, theme::Theme, user_template::UserLayout},
 };
 
 #[derive(PartialEq)]
@@ -27,7 +27,7 @@ pub struct VoiceSection {
   pub display_voice_members: DisplayVoiceMembers,
   pub theme: Theme,
   pub ui_scale: f32,
-  pub user_template_size: (u32, u32),
+  pub user_layout: UserLayout,
   pub user_template: Option<String>,
 }
 
@@ -89,7 +89,7 @@ impl Component for VoiceSection {
             is_voice_semitransparent,
             can_context_menu,
             theme: self.theme,
-            box_size: self.user_template_size,
+            layout: self.user_layout,
             user_template: self.user_template.clone(),
             is_right_aligned,
             ui_scale: scale.factor(),

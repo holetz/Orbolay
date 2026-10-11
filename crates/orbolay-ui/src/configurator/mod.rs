@@ -479,6 +479,78 @@ fn configurator(app: AppHandle, standalone: bool) -> impl IntoElement {
     })
     .child(divider())
     .child(SettingRow {
+      name: "Voice User Width (px)".into(),
+      description: Some("Width of each voice user row".into()),
+      kind: SettingKind::Input(Some(config.user_width.to_string())),
+      on_change: make_updater(app.clone(), local_config, |cfg, v| {
+        if let Ok(n) = v.trim().parse::<f32>() {
+          cfg.user_width = n.max(0.);
+        }
+      }),
+      disabled: false,
+    })
+    .child(divider())
+    .child(SettingRow {
+      name: "Avatar Size (px)".into(),
+      description: Some("Size of voice user avatars. Set to 0 to hide them".into()),
+      kind: SettingKind::Input(Some(config.user_avatar_size.to_string())),
+      on_change: make_updater(app.clone(), local_config, |cfg, v| {
+        if let Ok(n) = v.trim().parse::<f32>() {
+          cfg.user_avatar_size = n.max(0.);
+        }
+      }),
+      disabled: false,
+    })
+    .child(divider())
+    .child(SettingRow {
+      name: "Name Font Size (px)".into(),
+      description: Some("Size of voice user names; status icons follow it".into()),
+      kind: SettingKind::Input(Some(config.user_font_size.to_string())),
+      on_change: make_updater(app.clone(), local_config, |cfg, v| {
+        if let Ok(n) = v.trim().parse::<f32>() {
+          cfg.user_font_size = n.max(0.);
+        }
+      }),
+      disabled: false,
+    })
+    .child(divider())
+    .child(SettingRow {
+      name: "Avatar Gap (px)".into(),
+      description: Some("Space between a voice user's avatar and name".into()),
+      kind: SettingKind::Input(Some(config.user_avatar_gap.to_string())),
+      on_change: make_updater(app.clone(), local_config, |cfg, v| {
+        if let Ok(n) = v.trim().parse::<f32>() {
+          cfg.user_avatar_gap = n.max(0.);
+        }
+      }),
+      disabled: false,
+    })
+    .child(divider())
+    .child(SettingRow {
+      name: "Name Padding (px)".into(),
+      description: Some("Padding inside the box around a voice user's name".into()),
+      kind: SettingKind::Input(Some(config.user_name_padding.to_string())),
+      on_change: make_updater(app.clone(), local_config, |cfg, v| {
+        if let Ok(n) = v.trim().parse::<f32>() {
+          cfg.user_name_padding = n.max(0.);
+        }
+      }),
+      disabled: false,
+    })
+    .child(divider())
+    .child(SettingRow {
+      name: "Voice User Spacing (px)".into(),
+      description: Some("Vertical space between voice users".into()),
+      kind: SettingKind::Input(Some(config.user_spacing.to_string())),
+      on_change: make_updater(app.clone(), local_config, |cfg, v| {
+        if let Ok(n) = v.trim().parse::<f32>() {
+          cfg.user_spacing = n.max(0.);
+        }
+      }),
+      disabled: false,
+    })
+    .child(divider())
+    .child(SettingRow {
       name: "Notification Alignment".into(),
       description: Some("Screen position for notifications".into()),
       kind: SettingKind::Dropdown(

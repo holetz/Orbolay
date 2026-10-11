@@ -81,6 +81,30 @@ fn default_ui_scale() -> f32 {
   1.0
 }
 
+fn default_user_width() -> f32 {
+  320.
+}
+
+fn default_user_avatar_size() -> f32 {
+  48.
+}
+
+fn default_user_font_size() -> f32 {
+  14.
+}
+
+fn default_user_avatar_gap() -> f32 {
+  8.
+}
+
+fn default_user_name_padding() -> f32 {
+  6.
+}
+
+fn default_user_spacing() -> f32 {
+  14.
+}
+
 fn default_rtt_max_lines() -> usize {
   6
 }
@@ -131,6 +155,24 @@ pub struct Config {
   pub user_offset_x: i32,
   #[serde(default)]
   pub user_offset_y: i32,
+  /// Width (px) of each voice user row.
+  #[serde(default = "default_user_width")]
+  pub user_width: f32,
+  /// Avatar diameter (px) of voice users; `0` hides the avatar.
+  #[serde(default = "default_user_avatar_size")]
+  pub user_avatar_size: f32,
+  /// Font size (px) of voice user names; status icons follow it.
+  #[serde(default = "default_user_font_size")]
+  pub user_font_size: f32,
+  /// Horizontal gap (px) between a voice user's avatar and name.
+  #[serde(default = "default_user_avatar_gap")]
+  pub user_avatar_gap: f32,
+  /// Padding (px) inside a voice user's name box.
+  #[serde(default = "default_user_name_padding")]
+  pub user_name_padding: f32,
+  /// Vertical space (px) between voice users.
+  #[serde(default = "default_user_spacing")]
+  pub user_spacing: f32,
   #[serde(default)]
   pub display_voice_members: Option<DisplayVoiceMembers>,
   #[serde(default)]
@@ -205,6 +247,12 @@ impl Default for Config {
       message_offset_y: 0,
       user_offset_x: 0,
       user_offset_y: 0,
+      user_width: default_user_width(),
+      user_avatar_size: default_user_avatar_size(),
+      user_font_size: default_user_font_size(),
+      user_avatar_gap: default_user_avatar_gap(),
+      user_name_padding: default_user_name_padding(),
+      user_spacing: default_user_spacing(),
       display_voice_members: Some(DisplayVoiceMembers::AlwaysSemiTransparent),
       messages_semitransparent: false,
       is_keybind_enabled: None,
@@ -277,5 +325,17 @@ mod tests {
     assert_eq!(config.rtt_language, "auto");
     assert_eq!(config.rtt_threads, None);
     assert_eq!(config.rtt_event_offset_ms, 0);
+  }
+
+  #[test]
+  fn old_config_gets_user_layout_defaults() {
+    let config: Config = serde_json::from_str("{}").unwrap();
+    let default = Config::default();
+    assert_eq!(config.user_width, default.user_width);
+    assert_eq!(config.user_avatar_size, 48.);
+    assert_eq!(config.user_font_size, 14.);
+    assert_eq!(config.user_avatar_gap, 8.);
+    assert_eq!(config.user_name_padding, 6.);
+    assert_eq!(config.user_spacing, 14.);
   }
 }
