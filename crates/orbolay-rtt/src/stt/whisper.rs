@@ -13,6 +13,66 @@ use super::{AudioSegment, SttEngine, SttError, TextSegment};
 /// Upper bound for the default thread count, so a game keeps most of the CPU.
 const MAX_DEFAULT_THREADS: usize = 4;
 
+/// Segments whose no-speech probability exceeds this are dropped outright.
+const NO_SPEECH_THRESHOLD: f32 = 0.6;
+/// Below this mean token probability a segment counts as low-confidence.
+const LOW_CONFIDENCE: f32 = 0.5;
+/// Above this no-speech probability a segment counts as low-confidence.
+const DOUBTFUL_NO_SPEECH: f32 = 0.2;
+
+/// Phrases Whisper invents on noise and music (subtitle credits, video outros), compared after
+/// lowercasing and stripping punctuation. Dropped only when the segment is low-confidence, so a
+/// real "thank you" survives.
+const HALLUCINATIONS: &[&str] = &[
+  "thank you",
+  "thanks for watching",
+  "thank you for watching",
+  "thank you so much for watching",
+  "please subscribe",
+  "subscribe to my channel",
+  "like and subscribe",
+  "see you next time",
+  "bye",
+  "you",
+  "subtitles by the amaraorg community",
+  "obrigado",
+  "obrigado por assistir",
+  "legendas pela comunidade amaraorg",
+  "gracias por ver el video",
+  "untertitel der amaraorg community",
+  "soustitres réalisés par la communauté damaraorg",
+];
+
+fn normalise(text: &str) -> String {
+  text
+    .chars()
+    .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+    .collect::<String>()
+    .split_whitespace()
+    .collect::<Vec<_>>()
+    .join(" ")
+    .to_lowercase()
+}
+
+/// Whether a recognised segment is real speech rather than a hallucination on noise.
+fn is_plausible(text: &str, no_speech_prob: f32, mean_token_prob: f32) -> bool {
+  if no_speech_prob > NO_SPEECH_THRESHOLD {
+    return false;
+  }
+  let norm = normalise(text);
+  // Pure annotations such as "[BLANK_AUDIO]", "(music)" or "♪♪" carry no words.
+  if norm.is_empty() || is_annotation(text) {
+    return false;
+  }
+  let doubtful = mean_token_prob < LOW_CONFIDENCE || no_speech_prob > DOUBTFUL_NO_SPEECH;
+  !(doubtful && HALLUCINATIONS.contains(&norm.as_str()))
+}
+
+fn is_annotation(text: &str) -> bool {
+  let t = text.trim();
+  (t.starts_with('[') && t.ends_with(']')) || (t.starts_with('(') && t.ends_with(')'))
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct WhisperConfig {
   pub model_path: PathBuf,
@@ -80,6 +140,8 @@ impl SttEngine for WhisperEngine {
     params.set_no_context(true);
     params.set_single_segment(!segment.is_final);
     params.set_suppress_blank(true);
+    params.set_suppress_nst(true);
+    params.set_no_speech_thold(NO_SPEECH_THRESHOLD);
     params.set_print_special(false);
     params.set_print_progress(false);
     params.set_print_realtime(false);
@@ -93,14 +155,25 @@ impl SttEngine for WhisperEngine {
     let mut out = Vec::new();
     for s in self.state.as_iter() {
       let text = s.to_str_lossy().map_err(engine_error)?.trim().to_string();
-      if text.is_empty() {
+      let no_speech_prob = s.no_speech_probability();
+      let tokens = s.n_tokens().max(0);
+      let mean_token_prob = if tokens == 0 {
+        0.
+      } else {
+        (0..tokens)
+          .filter_map(|i| s.get_token(i))
+          .map(|t| t.token_probability())
+          .sum::<f32>()
+          / tokens as f32
+      };
+      if !is_plausible(&text, no_speech_prob, mean_token_prob) {
         continue;
       }
       out.push(TextSegment {
         start: segment.start + centis(s.start_timestamp()),
         end: segment.start + centis(s.end_timestamp()),
         text,
-        no_speech_prob: s.no_speech_probability(),
+        no_speech_prob,
       });
     }
     Ok(out)
@@ -131,6 +204,29 @@ mod tests {
     let auto = config(None).thread_count();
     assert!((1..=MAX_DEFAULT_THREADS).contains(&auto));
     assert_eq!(config(Some(0)).thread_count(), auto);
+  }
+
+  #[test]
+  fn guard_drops_silence_annotations_and_doubtful_stock_phrases() {
+    assert!(
+      !is_plausible("Hello there", 0.9, 0.9),
+      "no-speech probability too high"
+    );
+    assert!(!is_plausible("[BLANK_AUDIO]", 0.0, 0.9));
+    assert!(!is_plausible("(music)", 0.0, 0.9));
+    assert!(!is_plausible(" ♪ ♪ ", 0.0, 0.9));
+    assert!(!is_plausible("Thanks for watching!", 0.1, 0.3));
+    assert!(!is_plausible("Obrigado.", 0.3, 0.9));
+  }
+
+  #[test]
+  fn guard_keeps_confident_speech_even_when_it_matches_a_stock_phrase() {
+    assert!(is_plausible("Thank you.", 0.05, 0.9));
+    assert!(is_plausible(
+      "Ask not what your country can do for you",
+      0.1,
+      0.3
+    ));
   }
 
   #[test]
