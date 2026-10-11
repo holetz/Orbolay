@@ -156,6 +156,13 @@ pub fn handle_ws_message(
             .voice_users
             .retain(|user| user.id != data.state.user_id);
         } else {
+          let now = std::time::Instant::now();
+          match data.state.speaking {
+            Some(true) => state.speaking.record_start(&data.state.user_id, now),
+            Some(false) => state.speaking.record_stop(&data.state.user_id, now),
+            None => {}
+          }
+
           let user = state
             .voice_users
             .iter_mut()

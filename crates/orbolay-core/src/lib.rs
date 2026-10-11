@@ -3,6 +3,7 @@ pub mod config;
 pub mod dirs;
 pub mod monitors;
 pub mod payloads;
+pub mod speaking_timeline;
 pub mod transcript;
 pub mod user;
 pub mod util;

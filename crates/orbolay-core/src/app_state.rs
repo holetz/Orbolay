@@ -6,6 +6,7 @@ use std::{
 use crate::{
   config::{Config, TransportMode},
   payloads::{Notification, SoundboardSoundPayload},
+  speaking_timeline::SpeakingTimeline,
   transcript::{TranscriptLine, push_capped},
   user::{PremiumType, User},
   util::bridge::BridgeMessage,
@@ -80,6 +81,7 @@ pub struct AppState {
   pub voice_users: Vec<User>,
   pub messages: Vec<Notification>,
   pub transcript: VecDeque<TranscriptLine>,
+  pub speaking: SpeakingTimeline,
   pub soundboard_cache: HashMap<String, Vec<SoundboardSoundPayload>>,
 
   // Name caches
@@ -114,6 +116,7 @@ impl AppState {
       voice_users: vec![],
       messages: vec![],
       transcript: VecDeque::new(),
+      speaking: SpeakingTimeline::new(),
       soundboard_cache: HashMap::new(),
 
       guild_names: default_guild_names,
