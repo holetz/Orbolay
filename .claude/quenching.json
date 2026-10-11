@@ -1,5 +1,5 @@
 {
-  "integrationBranch": "develop",
+  "integrationBranch": "main",
   "backend": "git",
   "specs": {
     "card": { "provider": "none" },

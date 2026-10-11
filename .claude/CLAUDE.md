@@ -5,8 +5,8 @@ Lives under `.claude/` on purpose: the upstream export (`feat/rtt`) excludes `sp
 
 ## Operating
 
-- **Base / integration branch:** `develop`. `main` carries the fork's released work: it is fast-forwarded to
-  `develop` (it no longer mirrors `upstream/main`; compare against `upstream/main` directly).
+- **Base / integration branch:** `main` (there is no `develop`). It does not mirror `upstream/main`;
+  compare against `upstream/main` directly.
 - **Specs store:** `cq specs` with the `git` backend (branch `quenching` on `origin`), no tracker
   cards. Never create issues or PRs on `SpikeHD/Orbolay` from automation.
 - **Gate** (run from the repo root before every commit and merge):
