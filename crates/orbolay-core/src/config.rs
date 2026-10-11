@@ -93,6 +93,16 @@ fn default_rtt_font_scale() -> f32 {
   1.0
 }
 
+pub const DEFAULT_RTT_MODEL: &str = "ggml-base";
+
+fn default_rtt_model() -> String {
+  DEFAULT_RTT_MODEL.into()
+}
+
+fn default_rtt_language() -> String {
+  "auto".into()
+}
+
 fn default_true() -> bool {
   true
 }
@@ -167,6 +177,15 @@ pub struct Config {
   /// PulseAudio source for captions of what others say; `None` uses the default sink's monitor.
   #[serde(default)]
   pub rtt_loopback_device: Option<String>,
+  /// Speech model: a name looked up in the models dir (`ggml-base` → `ggml-base.bin`) or a path.
+  #[serde(default = "default_rtt_model")]
+  pub rtt_model: String,
+  /// Spoken language as an ISO 639-1 code, or `auto` to detect it.
+  #[serde(default = "default_rtt_language")]
+  pub rtt_language: String,
+  /// Threads the speech engine may use; `None` picks from the available cores.
+  #[serde(default)]
+  pub rtt_threads: Option<usize>,
 }
 
 impl Default for Config {
@@ -205,6 +224,9 @@ impl Default for Config {
       rtt_show_avatars: true,
       rtt_mic_device: None,
       rtt_loopback_device: None,
+      rtt_model: default_rtt_model(),
+      rtt_language: default_rtt_language(),
+      rtt_threads: None,
     }
   }
 }
@@ -247,5 +269,8 @@ mod tests {
     assert_eq!(config.rtt_alignment, None);
     assert_eq!(config.rtt_mic_device, None);
     assert_eq!(config.rtt_loopback_device, None);
+    assert_eq!(config.rtt_model, DEFAULT_RTT_MODEL);
+    assert_eq!(config.rtt_language, "auto");
+    assert_eq!(config.rtt_threads, None);
   }
 }

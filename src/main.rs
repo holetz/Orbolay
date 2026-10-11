@@ -240,6 +240,8 @@ fn app() -> impl IntoElement {
     #[cfg(feature = "rtt")]
     if args.rtt_demo {
       rtt_demo::spawn(app.clone());
+    } else {
+      spawn_rtt_controller(app.clone());
     }
 
     // Re-render periodically while captions are on screen so finished lines fade out
@@ -469,4 +471,46 @@ fn app() -> impl IntoElement {
             })
         }))
     })
+}
+
+/// Starts the caption pipeline while `rttEnabled` is on, and restarts it when its settings change.
+#[cfg(feature = "rtt")]
+fn spawn_rtt_controller(app: AppHandle) {
+  use orbolay_rtt::pipeline::{Pipeline, PipelineConfig};
+
+  std::thread::spawn(move || {
+    let mut running: Option<Pipeline> = None;
+    let mut applied: Option<PipelineConfig> = None;
+    loop {
+      let wanted = app.read(|state| {
+        state
+          .config
+          .rtt_enabled
+          .then(|| PipelineConfig::from_config(&state.config))
+      });
+
+      // A failed start is not retried until the settings change, so it is logged once.
+      if wanted != applied {
+        // Dropping the pipeline stops its sources and joins its threads.
+        drop(running.take());
+        if let Some(config) = &wanted {
+          match Pipeline::start(config, app.clone()) {
+            Ok((pipeline, warnings)) => {
+              for warning in warnings {
+                warn!("Captions: {}", warning);
+              }
+              log!("Captions started");
+              running = Some(pipeline);
+            }
+            Err(err) => warn!("Captions could not start: {}", err),
+          }
+        } else if applied.is_some() {
+          log!("Captions stopped");
+        }
+        applied = wanted;
+      }
+
+      std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+  });
 }
