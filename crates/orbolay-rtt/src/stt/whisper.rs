@@ -13,6 +13,21 @@ use super::{AudioSegment, SttEngine, SttError, TextSegment};
 /// Upper bound for the default thread count, so a game keeps most of the CPU.
 const MAX_DEFAULT_THREADS: usize = 4;
 
+/// whisper's encoder covers 30 s of audio in 1500 positions (50 per second).
+const AUDIO_CTX_PER_SECOND: usize = 50;
+const FULL_AUDIO_CTX: usize = 1500;
+/// Positions added past the clip so its last words are not cut off.
+const AUDIO_CTX_MARGIN: usize = 64;
+/// Below this whisper's output degrades sharply, so short clips still get this much context.
+const MIN_AUDIO_CTX: usize = 256;
+
+/// The encoder context for a clip of `samples` at 16 kHz: proportional to its length instead of
+/// whisper's fixed 30 s window, which makes short clips several times cheaper to encode.
+pub fn audio_ctx_for(samples: usize) -> usize {
+  let positions = (samples * AUDIO_CTX_PER_SECOND).div_ceil(16_000);
+  (positions + AUDIO_CTX_MARGIN).clamp(MIN_AUDIO_CTX, FULL_AUDIO_CTX)
+}
+
 /// Segments whose no-speech probability exceeds this are dropped outright.
 const NO_SPEECH_THRESHOLD: f32 = 0.6;
 /// Below this mean token probability a segment counts as low-confidence.
@@ -138,6 +153,7 @@ impl SttEngine for WhisperEngine {
     params.set_n_threads(i32::try_from(self.threads).unwrap_or(1));
     params.set_language(Some(&self.language));
     params.set_no_context(true);
+    params.set_audio_ctx(i32::try_from(audio_ctx_for(segment.samples.len())).unwrap_or(0));
     params.set_single_segment(!segment.is_final);
     params.set_suppress_blank(true);
     params.set_suppress_nst(true);
@@ -196,6 +212,14 @@ mod tests {
   fn missing_model_is_reported() {
     let err = WhisperEngine::new(&config(None)).err().unwrap();
     assert!(matches!(err, SttError::ModelNotFound(_)));
+  }
+
+  #[test]
+  fn audio_ctx_scales_with_the_clip_and_stays_in_bounds() {
+    assert_eq!(audio_ctx_for(0), MIN_AUDIO_CTX);
+    assert_eq!(audio_ctx_for(16_000 * 8), 8 * 50 + AUDIO_CTX_MARGIN);
+    assert_eq!(audio_ctx_for(16_000 * 30), FULL_AUDIO_CTX);
+    assert_eq!(audio_ctx_for(16_000 * 60), FULL_AUDIO_CTX);
   }
 
   #[test]
