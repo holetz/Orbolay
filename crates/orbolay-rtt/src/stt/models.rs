@@ -187,6 +187,11 @@ impl Transport for ClampedRead {
   fn is_open(&mut self) -> bool {
     self.inner.is_open()
   }
+
+  // `maybe_await_input` stays defaulted on purpose: it must reach the clamped `await_input` above.
+  fn is_tls(&self) -> bool {
+    self.inner.is_tls()
+  }
 }
 
 /// Downloads `url` into `dest`, aborting when the body goes `stall` without a byte.
@@ -389,5 +394,54 @@ mod tests {
     );
     let _ = fs::remove_file(&dest);
     let _ = server.join();
+  }
+
+  struct FakeTls {
+    buffers: ureq::unversioned::transport::LazyBuffers,
+    tls: bool,
+  }
+
+  impl fmt::Debug for FakeTls {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      f.debug_struct("FakeTls").finish_non_exhaustive()
+    }
+  }
+
+  impl Transport for FakeTls {
+    fn buffers(&mut self) -> &mut dyn Buffers {
+      &mut self.buffers
+    }
+
+    fn transmit_output(&mut self, _: usize, _: NextTimeout) -> Result<(), ureq::Error> {
+      Ok(())
+    }
+
+    fn await_input(&mut self, _: NextTimeout) -> Result<bool, ureq::Error> {
+      Ok(false)
+    }
+
+    fn is_open(&mut self) -> bool {
+      true
+    }
+
+    fn is_tls(&self) -> bool {
+      self.tls
+    }
+  }
+
+  fn clamped(tls: bool) -> ClampedRead {
+    ClampedRead {
+      inner: Box::new(FakeTls {
+        buffers: ureq::unversioned::transport::LazyBuffers::new(1024, 1024),
+        tls,
+      }),
+      read: Duration::from_secs(1),
+    }
+  }
+
+  #[test]
+  fn clamped_read_reports_a_tls_inner_transport_as_tls() {
+    assert!(clamped(true).is_tls(), "wrapper hid the inner TLS session");
+    assert!(!clamped(false).is_tls());
   }
 }
