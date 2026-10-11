@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.95"
 
 [features]
-rtt = []
+rtt = ["dep:orbolay-rtt"]
 
 [dependencies]
 bytes = { workspace = true }
@@ -15,6 +15,7 @@ freya = { workspace = true }
 orbolay-core = { path = "../orbolay-core" }
 orbolay-keys = { path = "../orbolay-keys" }
 orbolay-logging = { path = "../orbolay-logging" }
+orbolay-rtt = { path = "../orbolay-rtt", optional = true }
 open = { workspace = true }
 scraper = { workspace = true }
 serde = { workspace = true }

@@ -1,5 +1,6 @@
 //! Speech-to-text: the engine interface and the segments that flow through it.
 
+pub mod models;
 pub mod vad;
 pub mod whisper;
 

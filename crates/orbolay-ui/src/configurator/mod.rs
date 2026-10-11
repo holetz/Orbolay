@@ -160,6 +160,8 @@ fn configurator(app: AppHandle, standalone: bool) -> impl IntoElement {
 
   let mut local_config = use_state(|| app.read(|state| state.config.clone()));
   let mut reset_version = use_state(|| 0usize);
+  #[cfg(feature = "rtt")]
+  let mut model_status = use_state(String::new);
   let config = local_config.read().clone();
 
   let template_options = {
@@ -547,6 +549,56 @@ fn configurator(app: AppHandle, standalone: bool) -> impl IntoElement {
       }),
       disabled: false,
     })
+    .child(divider())
+    .child(SettingRow {
+      name: "Speech Model".into(),
+      description: Some(
+        if orbolay_rtt::stt::models::is_installed(&config.rtt_model) {
+          "Installed".into()
+        } else {
+          "Not installed: use Download Speech Model below".to_string()
+        },
+      ),
+      kind: SettingKind::Dropdown(
+        orbolay_rtt::stt::models::available_models(),
+        Some(config.rtt_model.clone()),
+      ),
+      on_change: make_updater(app.clone(), local_config, |cfg, v| {
+        cfg.rtt_model = v;
+      }),
+      disabled: false,
+    })
+    .child(wide_button("Download Speech Model", LIGHT_GRAY, {
+      let model = config.rtt_model.clone();
+      move |_| {
+        let model = model.clone();
+        let (tx, rx) = flume::bounded(1);
+        model_status.set(format!("Downloading {model}..."));
+        std::thread::spawn({
+          let model = model.clone();
+          move || {
+            let _ = tx.send(orbolay_rtt::stt::models::download(&model));
+          }
+        });
+        spawn(async move {
+          match rx.recv_async().await {
+            Ok(Ok(_)) => model_status.set(format!("Downloaded {model}")),
+            Ok(Err(err)) => {
+              warn!("Model download failed: {err}");
+              model_status.set(format!("Download failed: {err}"));
+            }
+            Err(_) => model_status.set("Download interrupted".into()),
+          }
+        });
+      }
+    }))
+    .child(
+      label()
+        .text(model_status.read().clone())
+        .color(MUTED_GRAY)
+        .font_size(12.)
+        .margin(Gaps::new_symmetric(0., 12.)),
+    )
     .child(divider())
     .child(SettingRow {
       name: "Captions Alignment".into(),
