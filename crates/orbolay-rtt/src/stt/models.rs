@@ -68,6 +68,11 @@ fn verify_sha256(path: &Path, expected: &str) -> Result<(), String> {
   }
 }
 
+/// Whether `model` (with or without `.bin`) is one of [`KNOWN_MODELS`].
+pub fn is_known(model: &str) -> bool {
+  KNOWN_MODELS.contains(&model.strip_suffix(".bin").unwrap_or(model))
+}
+
 /// Where `model` lives (or will live) on disk.
 pub fn local_path(model: &str) -> Option<PathBuf> {
   model_path(model)
@@ -82,29 +87,20 @@ pub fn download_url(model: &str) -> String {
   format!("{BASE_URL}/{file}.bin")
 }
 
-/// Known models first, then any other `.bin` found in the models directory, without duplicates.
+/// The models that can be selected, downloaded and resolved: exactly [`KNOWN_MODELS`].
 pub fn available_models() -> Vec<String> {
-  let mut names: Vec<String> = KNOWN_MODELS.iter().map(|s| s.to_string()).collect();
-  if let Some(dir) = local_path("x").and_then(|p| p.parent().map(Path::to_path_buf))
-    && let Ok(entries) = fs::read_dir(dir)
-  {
-    let mut extra: Vec<String> = entries
-      .filter_map(|e| e.ok())
-      .filter_map(|e| {
-        let name = e.file_name().to_string_lossy().into_owned();
-        name.strip_suffix(".bin").map(str::to_string)
-      })
-      .filter(|n| !names.contains(n))
-      .collect();
-    extra.sort();
-    names.extend(extra);
-  }
-  names
+  KNOWN_MODELS.iter().map(|s| s.to_string()).collect()
 }
 
 /// Downloads a known model into the models directory, through a temporary file so a failed
 /// transfer never leaves a truncated model behind. Blocking; returns the final path.
 pub fn download(model: &str) -> Result<PathBuf, String> {
+  if !is_known(model) {
+    return Err(format!(
+      "unknown model {model:?}: only {} can be downloaded",
+      KNOWN_MODELS.join(", ")
+    ));
+  }
   let expected = expected_sha256(model).ok_or_else(|| format!("no pinned checksum for {model}"))?;
   let target = local_path(model).ok_or("no config directory")?;
   let dir = target.parent().ok_or("invalid model path")?;
@@ -186,6 +182,31 @@ mod tests {
     )
     .unwrap();
     fs::remove_file(&path).unwrap();
+  }
+
+  const EVIL: &[&str] = &[
+    "../../evil",
+    "..",
+    "a/b",
+    "a\\b",
+    "/nonexistent-dir/evil",
+    "",
+  ];
+
+  #[test]
+  fn traversal_names_never_build_a_path_or_url() {
+    for name in EVIL {
+      assert_eq!(local_path(name), None, "path built for {name:?}");
+      assert!(!is_installed(name), "{name:?} reported installed");
+    }
+  }
+
+  #[test]
+  fn download_refuses_unknown_names_before_any_io() {
+    for name in EVIL.iter().chain(&["ggml-unknown", "ggml-tiny/../x"]) {
+      let err = download(name).unwrap_err();
+      assert!(err.contains("unknown model"), "{name:?}: {err}");
+    }
   }
 
   #[test]

@@ -555,6 +555,11 @@ fn configurator(app: AppHandle, standalone: bool) -> impl IntoElement {
       description: Some(
         if orbolay_rtt::stt::models::is_installed(&config.rtt_model) {
           "Installed".into()
+        } else if orbolay_rtt::stt::models::local_path(&config.rtt_model).is_none() {
+          format!(
+            "Invalid model name {:?}: pick one from the list",
+            config.rtt_model
+          )
         } else {
           "Not installed: use Download Speech Model below".to_string()
         },

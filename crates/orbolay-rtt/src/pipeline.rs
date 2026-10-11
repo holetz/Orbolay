@@ -25,12 +25,14 @@ use crate::stt::{AudioSegment, SttEngine, VadConfig, VadSegmenter, WhisperConfig
 const QUEUE_CAP: usize = 8;
 const POLL: Duration = Duration::from_millis(100);
 
-/// Resolves `rttModel`: an existing path is used as is, anything else names
-/// `<config dir>/models/<name>.bin`.
+/// Resolves `rttModel` to `<config dir>/models/<name>.bin`. Only [`KNOWN_MODELS`] names resolve:
+/// a path, an existing file, an unknown name or anything that is not a bare file name is `None`,
+/// so the config can never point the engine at an arbitrary file.
+///
+/// [`KNOWN_MODELS`]: crate::stt::models::KNOWN_MODELS
 pub fn model_path(model: &str) -> Option<PathBuf> {
-  let as_path = PathBuf::from(model);
-  if as_path.is_file() {
-    return Some(as_path);
+  if !is_bare_name(model) || !crate::stt::models::is_known(model) {
+    return None;
   }
   let file = if model.ends_with(".bin") {
     model.to_string()
@@ -38,6 +40,14 @@ pub fn model_path(model: &str) -> Option<PathBuf> {
     format!("{model}.bin")
   };
   Some(config_dir()?.join("models").join(file))
+}
+
+/// A single normal path component: no separators, no `.`/`..`, not empty.
+pub fn is_bare_name(name: &str) -> bool {
+  let mut parts = std::path::Path::new(name).components();
+  matches!(parts.next(), Some(std::path::Component::Normal(_)))
+    && parts.next().is_none()
+    && !name.contains(['/', '\\'])
 }
 
 /// Everything the pipeline is started from; a change to any of it restarts the pipeline.
@@ -424,6 +434,25 @@ mod tests {
   fn model_name_resolves_into_models_dir() {
     let path = model_path("ggml-base").unwrap();
     assert!(path.ends_with("models/ggml-base.bin"));
-    assert_eq!(model_path("x.bin").unwrap().file_name().unwrap(), "x.bin");
+    assert_eq!(
+      model_path("ggml-base.bin").unwrap().file_name().unwrap(),
+      "ggml-base.bin"
+    );
+  }
+
+  #[test]
+  fn existing_absolute_file_is_not_a_model() {
+    let file = std::env::temp_dir().join(format!("orbolay-notmodel-{}.bin", std::process::id()));
+    std::fs::write(&file, b"x").unwrap();
+    let got = model_path(file.to_str().unwrap());
+    std::fs::remove_file(&file).unwrap();
+    assert_eq!(got, None);
+    assert_eq!(model_path("/etc/passwd"), None);
+  }
+
+  #[test]
+  fn unknown_bare_name_is_not_a_model() {
+    assert_eq!(model_path("x.bin"), None);
+    assert_eq!(model_path("ggml-unknown"), None);
   }
 }
