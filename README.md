@@ -226,8 +226,8 @@ hl.window_rule({
 The `rtt` feature adds the `orbolay-rtt` audio capture crate, which links ALSA through `cpal`:
 
 * Build: `libasound2-dev` (Debian/Ubuntu), `alsa-lib-devel` (Fedora) or `alsa-lib` (Arch), plus
-  `pkg-config`. The crate is a workspace member, so `cargo build --workspace` / `cargo clippy --workspace`
-  need it even without the feature.
+  `pkg-config`. These are needed only with `--features rtt`; a default `cargo build/clippy/test --workspace`
+  does not compile ALSA, cpal or whisper.
 * Runtime: the ALSA PulseAudio plugin (`libasound2-plugins` on Debian/Ubuntu, `alsa-plugins-pulseaudio`
   on Fedora/Arch), which captures what Discord plays from the default sink's monitor on both
   PulseAudio and PipeWire (`pipewire-pulse`). No `libpulse` headers are needed.
