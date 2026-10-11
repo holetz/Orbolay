@@ -10,11 +10,14 @@ use super::{AudioFrame, CaptureError};
 pub const TARGET_RATE: u32 = 16_000;
 /// Input frames per FFT chunk.
 const CHUNK: usize = 1024;
+/// Input timestamp jump, beyond the previous frame's end, that marks a discontinuity.
+const GAP_TOLERANCE: Duration = Duration::from_millis(50);
 
 /// Streaming downmix + resample to [`TARGET_RATE`] mono, run on the consumer side of a source.
 ///
 /// Input is buffered into fixed chunks, so output lags the input by up to one chunk; output
-/// timestamps are derived from the first input frame plus the samples emitted since.
+/// timestamps are derived from the first input frame plus the samples emitted since. A forward
+/// jump in input timestamps (dropped frames) discards the buffered tail and re-anchors the origin.
 #[derive(Default)]
 pub struct MonoResampler {
   in_rate: u32,
@@ -23,6 +26,8 @@ pub struct MonoResampler {
   scratch: Vec<f32>,
   delay_left: usize,
   origin: Duration,
+  /// Where the previous input frame ended; a later start means frames were dropped.
+  expected_start: Option<Duration>,
   consumed: u64,
   emitted: u64,
 }
@@ -55,9 +60,13 @@ impl MonoResampler {
 
   /// Feeds one source frame and returns the 16 kHz mono samples that became available.
   pub fn process(&mut self, frame: &AudioFrame) -> Result<Option<AudioFrame>, CaptureError> {
-    if frame.sample_rate != self.in_rate {
+    let gap = self
+      .expected_start
+      .is_some_and(|end| frame.timestamp > end + GAP_TOLERANCE);
+    if frame.sample_rate != self.in_rate || gap {
       self.reset(frame)?;
     }
+    self.expected_start = Some(frame.timestamp + frame.duration());
     let channels = usize::from(frame.channels.max(1));
     let mono = frame
       .samples
@@ -206,5 +215,30 @@ mod tests {
       second.timestamp,
       Duration::from_millis(250) + Duration::from_micros(125)
     );
+  }
+
+  #[test]
+  fn output_timestamps_re_anchor_after_an_input_gap() {
+    for rate in [TARGET_RATE, 48_000] {
+      let mut resampler = MonoResampler::default();
+      let block = |ms: u64| AudioFrame {
+        timestamp: Duration::from_millis(ms),
+        sample_rate: rate,
+        channels: 1,
+        samples: vec![0.; (rate as usize) / 100 * 2],
+      };
+      // 20 ms blocks at 0 ms, then a 5 s jump as if frames were dropped.
+      let mut stamps = Vec::new();
+      for ms in [0, 20, 40, 5_000, 5_020, 5_040, 5_060] {
+        if let Some(out) = resampler.process(&block(ms)).unwrap() {
+          stamps.push(out.timestamp);
+        }
+      }
+      let after_gap = stamps.last().copied().unwrap();
+      assert!(
+        after_gap >= Duration::from_millis(5_000),
+        "rate {rate}: output stamped {after_gap:?}, expected >= 5s"
+      );
+    }
   }
 }
