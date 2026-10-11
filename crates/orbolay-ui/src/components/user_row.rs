@@ -13,7 +13,7 @@ use crate::{
   util::{
     scale::{GapsScaleExt, UiScale},
     theme::Theme,
-    user_template::load_user_template,
+    user_template::{UserLayout, load_user_template},
   },
 };
 
@@ -26,7 +26,7 @@ pub struct UserRow {
   pub is_voice_semitransparent: bool,
   pub can_context_menu: bool,
   pub theme: Theme,
-  pub box_size: (u32, u32),
+  pub layout: UserLayout,
   pub user_template: Option<String>,
   pub is_right_aligned: bool,
   pub ui_scale: f32,
@@ -40,8 +40,9 @@ impl Component for UserRow {
 
   fn render(&self) -> impl IntoElement {
     let scale = UiScale::new(self.ui_scale);
-    let width = scale.px(self.box_size.0 as f32);
-    let height = scale.px(self.box_size.1 as f32);
+    let box_size = self.layout.box_size();
+    let width = scale.px(box_size.0 as f32);
+    let height = scale.px(box_size.1 as f32);
     let opacity = if self.user.voice_state != UserVoiceState::Speaking
       && self.is_voice_semitransparent
       && !self.is_open
@@ -56,15 +57,16 @@ impl Component for UserRow {
       self.user.clone(),
       self.is_self,
       self.theme,
+      self.layout,
       self.user_template.clone(),
       self.is_right_aligned,
     );
 
     use_side_effect_with_deps(&deps, move |deps| {
-      let (user, is_self, theme, user_template, is_right_aligned) = deps.clone();
+      let (user, is_self, theme, layout, user_template, is_right_aligned) = deps.clone();
       let template = load_user_template(user_template.as_deref());
       let mut handle = handle;
-      handle.load_html(template.render(&user, is_self, &theme, is_right_aligned));
+      handle.load_html(template.render(&user, is_self, &theme, &layout, is_right_aligned));
     });
 
     rect()
@@ -77,8 +79,8 @@ impl Component for UserRow {
       .opacity(opacity)
       .child(
         rect()
-          .width(Size::px(self.box_size.0 as f32))
-          .height(Size::px(self.box_size.1 as f32))
+          .width(Size::px(box_size.0 as f32))
+          .height(Size::px(box_size.1 as f32))
           .scale(self.ui_scale)
           .child(HtmlViewer::new(handle)),
       )

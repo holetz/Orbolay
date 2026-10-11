@@ -69,6 +69,17 @@ on the notification navigates to the source message.
 * `--green`
 * `--border-radius`
 
+### Users
+
+These follow the voice user layout settings in the configurator. The row box is sized from them, so a template that
+uses them keeps its content fitting the box.
+
+* `--avatar-size` - avatar diameter (`0px` when avatars are hidden)
+* `--avatar-gap` - space between the avatar and the name (`0px` when avatars are hidden)
+* `--font-size` - name font size
+* `--line-height` - name line height, also used for the status icon size
+* `--name-padding` - padding inside the name box
+
 ## Available State Classes
 
 State classes are applied to the root element to allow your template to know how to render the current state.
@@ -85,6 +96,7 @@ required `id` attribute.
 * `no-avatar` - there was an issue fetching the avatar or the user otherwise does not have one
 * `self` - the user is the current user
 * `right` - the user list is being rendered on the right-hand side of the screen
+* `hide-avatar` - the avatar size is set to 0, so the avatar should not be shown
 
 ### Notifications
 

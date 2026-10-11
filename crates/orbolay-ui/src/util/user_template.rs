@@ -9,7 +9,7 @@ use std::{
 };
 
 use orbolay_core::{
-  config::config_dir,
+  config::{Config, config_dir},
   dirs::{TEMPLATES_DIR, USER_TEMPLATES},
   user::{User, UserVoiceState},
 };
@@ -151,18 +151,93 @@ pub fn load_user_template(name: Option<&str>) -> UserTemplate {
   template
 }
 
+/// Sizes of a voice user row, exposed to templates as CSS variables
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct UserLayout {
+  pub width: f32,
+  pub avatar_size: f32,
+  pub font_size: f32,
+  pub avatar_gap: f32,
+  pub name_padding: f32,
+  pub spacing: f32,
+}
+
+impl Default for UserLayout {
+  fn default() -> Self {
+    Self::from_config(&Config::default())
+  }
+}
+
+impl UserLayout {
+  pub fn from_config(config: &Config) -> Self {
+    let clamp = |value: f32, min: f32, max: f32, default: f32| {
+      if value.is_finite() {
+        value.clamp(min, max)
+      } else {
+        default
+      }
+    };
+    Self {
+      width: clamp(config.user_width, 80., 1000., 320.),
+      avatar_size: clamp(config.user_avatar_size, 0., 160., 48.),
+      font_size: clamp(config.user_font_size, 6., 64., 14.),
+      avatar_gap: clamp(config.user_avatar_gap, 0., 64., 8.),
+      name_padding: clamp(config.user_name_padding, 0., 32., 6.),
+      spacing: clamp(config.user_spacing, 0., 128., 14.),
+    }
+  }
+
+  pub fn shows_avatar(&self) -> bool {
+    self.avatar_size > 0.
+  }
+
+  /// Line height of the name, also used for the status icons
+  pub fn line_height(&self) -> f32 {
+    (self.font_size * 8. / 7.).round()
+  }
+
+  /// Size of the box a row is rendered into, including the spacing to the next row
+  pub fn box_size(&self) -> (u32, u32) {
+    let name_height = self.line_height() + self.name_padding * 2.;
+    let content = name_height.max(self.avatar_size);
+    (
+      self.width.round() as u32,
+      (content + self.spacing).round() as u32,
+    )
+  }
+
+  pub fn css_decls(&self) -> String {
+    format!(
+      "--avatar-size: {}px; --avatar-gap: {}px; --font-size: {}px; --line-height: {}px; --name-padding: {}px;",
+      self.avatar_size,
+      if self.shows_avatar() {
+        self.avatar_gap
+      } else {
+        0.
+      },
+      self.font_size,
+      self.line_height(),
+      self.name_padding,
+    )
+  }
+}
+
 impl UserTemplate {
   pub fn render(
     &self,
     user: &User,
     is_self: bool,
     theme: &Theme,
+    layout: &UserLayout,
     is_right_aligned: bool,
   ) -> String {
     let root_tag = render_tag(&self.root_name, &self.root_attrs);
     let mut state_classes = user_template_classes(user, is_self);
     if is_right_aligned {
       state_classes.push("right");
+    }
+    if !layout.shows_avatar() {
+      state_classes.push("hide-avatar");
     }
     let mut new_attrs = merge_classes(&self.root_attrs, &state_classes);
     new_attrs.push(("data-user-id".to_string(), user.id.clone()));
@@ -171,7 +246,11 @@ impl UserTemplate {
 
     html = html.replace(
       "</head>",
-      &format!("<style>:root{{{}}}</style></head>", theme_decls(theme)),
+      &format!(
+        "<style>:root{{{}{}}}</style></head>",
+        theme_decls(theme),
+        layout.css_decls()
+      ),
     );
     html = html.replace(AVATAR_TOKEN, &avatar_url(user));
     html = html.replace(NAME_TOKEN, &escape_html(&user.name));
@@ -316,4 +395,71 @@ fn avatar_url(user: &User) -> String {
     "https://cdn.discordapp.com/avatars/{}/{}.png?size=160",
     user.id, user.avatar
   )
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn default_layout_keeps_the_original_row_size() {
+    assert_eq!(UserLayout::default().box_size(), (320, 62));
+  }
+
+  #[test]
+  fn smaller_avatar_shrinks_the_row() {
+    let layout = UserLayout {
+      avatar_size: 24.,
+      spacing: 4.,
+      ..UserLayout::default()
+    };
+    // name box: 16px line + 2 * 6px padding = 28px, taller than the avatar
+    assert_eq!(layout.box_size(), (320, 32));
+  }
+
+  #[test]
+  fn hidden_avatar_drops_the_gap() {
+    let layout = UserLayout {
+      avatar_size: 0.,
+      ..UserLayout::default()
+    };
+    assert!(!layout.shows_avatar());
+    assert!(layout.css_decls().contains("--avatar-gap: 0px;"));
+  }
+
+  #[test]
+  fn out_of_range_config_is_clamped() {
+    let config = Config {
+      user_avatar_size: -5.,
+      user_font_size: f32::NAN,
+      user_spacing: 1000.,
+      ..Config::default()
+    };
+    let layout = UserLayout::from_config(&config);
+    assert_eq!(layout.avatar_size, 0.);
+    assert_eq!(layout.font_size, 14.);
+    assert_eq!(layout.spacing, 128.);
+  }
+
+  #[test]
+  fn render_injects_layout_variables() {
+    let user = User {
+      id: "1".into(),
+      name: "someone".into(),
+      avatar: String::new(),
+      voice_state: UserVoiceState::NotSpeaking,
+      streaming: false,
+      camera: false,
+      volume: 100.,
+      speaking_epoch: 0,
+    };
+    let theme = Theme::from_values(
+      freya::prelude::Color::BLACK,
+      freya::prelude::Color::WHITE,
+      10.,
+    );
+    let html = default_template().render(&user, false, &theme, &UserLayout::default(), false);
+    assert!(html.contains("--avatar-size: 48px;"));
+    assert!(html.contains("--font-size: 14px;"));
+  }
 }

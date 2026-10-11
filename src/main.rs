@@ -22,7 +22,7 @@ use orbolay_transport::{create_transport_thread, maybe_notify_update, start_conf
 use orbolay_ui::{
   components::{CaptionPanel, MessagesSection, Soundboard, VoiceControls, VoiceSection},
   open_configurator, open_configurator_standalone,
-  util::{scale::UiScale, theme},
+  util::{scale::UiScale, theme, user_template::UserLayout},
 };
 use winit::window::WindowLevel;
 
@@ -392,7 +392,7 @@ fn app() -> impl IntoElement {
       display_voice_members: config.display_voice_members.clone().unwrap_or_default(),
       theme,
       ui_scale,
-      user_template_size: (320, 62),
+      user_layout: UserLayout::from_config(&config),
       user_template: config.user_template.clone(),
     })
     // Messages
