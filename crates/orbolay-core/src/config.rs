@@ -161,6 +161,12 @@ pub struct Config {
   pub rtt_font_scale: f32,
   #[serde(default = "default_true")]
   pub rtt_show_avatars: bool,
+  /// Input device for captions of what you say; `None` uses the system default.
+  #[serde(default)]
+  pub rtt_mic_device: Option<String>,
+  /// PulseAudio source for captions of what others say; `None` uses the default sink's monitor.
+  #[serde(default)]
+  pub rtt_loopback_device: Option<String>,
 }
 
 impl Default for Config {
@@ -197,6 +203,8 @@ impl Default for Config {
       rtt_fade_seconds: default_rtt_fade_seconds(),
       rtt_font_scale: default_rtt_font_scale(),
       rtt_show_avatars: true,
+      rtt_mic_device: None,
+      rtt_loopback_device: None,
     }
   }
 }
@@ -237,5 +245,7 @@ mod tests {
     assert_eq!(config.rtt_font_scale, 1.0);
     assert!(config.rtt_show_avatars);
     assert_eq!(config.rtt_alignment, None);
+    assert_eq!(config.rtt_mic_device, None);
+    assert_eq!(config.rtt_loopback_device, None);
   }
 }

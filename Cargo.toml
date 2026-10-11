@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/orbolay-core", "crates/orbolay-keys", "crates/orbolay-logging", "crates/orbolay-transport", "crates/orbolay-ui"]
+members = [".", "crates/orbolay-core", "crates/orbolay-keys", "crates/orbolay-logging", "crates/orbolay-rtt", "crates/orbolay-transport", "crates/orbolay-ui"]
 resolver = "3"
 
 [workspace.dependencies]
@@ -35,8 +35,8 @@ rust-version = "1.95"
 description = "Quick, small, native, multi-platform Discord overlay alternative"
 
 [features]
-# Live captions (real-time transcription). Currently gates only the UI settings and demo feed.
-rtt = ["orbolay-ui/rtt"]
+# Live captions (real-time transcription): UI settings, demo feed and the audio capture crate.
+rtt = ["orbolay-ui/rtt", "dep:orbolay-rtt"]
 
 [profile.release]
 opt-level = 3
@@ -60,6 +60,7 @@ open = { workspace = true }
 orbolay-core = { path = "crates/orbolay-core" }
 orbolay-keys = { path = "crates/orbolay-keys" }
 orbolay-logging = { path = "crates/orbolay-logging" }
+orbolay-rtt = { path = "crates/orbolay-rtt", optional = true }
 orbolay-transport = { path = "crates/orbolay-transport" }
 orbolay-ui = { path = "crates/orbolay-ui" }
 sysinfo = { workspace = true }

@@ -1,0 +1,16 @@
+[package]
+name = "orbolay-rtt"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Audio capture pipeline for Orbolay live captions"
+
+[dependencies]
+audioadapter-buffers = "2"
+cpal = "0.17"
+flume = { workspace = true }
+orbolay-core = { path = "../orbolay-core" }
+rubato = "1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+alsa = "0.11"
