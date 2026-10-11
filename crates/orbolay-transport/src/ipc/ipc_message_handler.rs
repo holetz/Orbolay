@@ -160,6 +160,9 @@ pub fn handle_ipc_message(
     }
     "SPEAKING_START" => {
       let data = serde_json::from_value::<SpeakingPayload>(data)?;
+      state
+        .speaking
+        .record_start(&data.user_id, std::time::Instant::now());
       if let Some(user) = state
         .voice_users
         .iter_mut()
@@ -171,6 +174,10 @@ pub fn handle_ipc_message(
     }
     "SPEAKING_STOP" => {
       let data = serde_json::from_value::<SpeakingPayload>(data)?;
+      // The raw event time, not the 300 ms-delayed UI state below.
+      state
+        .speaking
+        .record_stop(&data.user_id, std::time::Instant::now());
       if let Some(user) = state
         .voice_users
         .iter_mut()
