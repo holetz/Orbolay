@@ -87,24 +87,9 @@ pub fn download_url(model: &str) -> String {
   format!("{BASE_URL}/{file}.bin")
 }
 
-/// Known models first, then any other `.bin` found in the models directory, without duplicates.
+/// The models that can be selected, downloaded and resolved: exactly [`KNOWN_MODELS`].
 pub fn available_models() -> Vec<String> {
-  let mut names: Vec<String> = KNOWN_MODELS.iter().map(|s| s.to_string()).collect();
-  if let Some(dir) = local_path("x").and_then(|p| p.parent().map(Path::to_path_buf))
-    && let Ok(entries) = fs::read_dir(dir)
-  {
-    let mut extra: Vec<String> = entries
-      .filter_map(|e| e.ok())
-      .filter_map(|e| {
-        let name = e.file_name().to_string_lossy().into_owned();
-        name.strip_suffix(".bin").map(str::to_string)
-      })
-      .filter(|n| !names.contains(n))
-      .collect();
-    extra.sort();
-    names.extend(extra);
-  }
-  names
+  KNOWN_MODELS.iter().map(|s| s.to_string()).collect()
 }
 
 /// Downloads a known model into the models directory, through a temporary file so a failed
