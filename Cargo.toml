@@ -36,7 +36,7 @@ description = "Quick, small, native, multi-platform Discord overlay alternative"
 
 [features]
 # Live captions (real-time transcription): UI settings, demo feed and the audio capture crate.
-rtt = ["orbolay-ui/rtt", "dep:orbolay-rtt"]
+rtt = ["orbolay-ui/rtt", "dep:orbolay-rtt", "orbolay-rtt/capture"]
 
 [profile.release]
 opt-level = 3
