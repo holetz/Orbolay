@@ -210,6 +210,13 @@ fn run_engine(
     let Some(job) = queue.pop(POLL) else {
       continue;
     };
+    if is_discard(&job.segment) {
+      app.update(|state| {
+        let id = line_id(job.source, job.segment.utterance);
+        state.transcript.retain(|l| l.id != id);
+      });
+      continue;
+    }
     let Ok(text) = engine.transcribe(&job.segment) else {
       continue;
     };
@@ -243,6 +250,19 @@ fn run_engine(
   }
 }
 
+/// A final with no audio closes an utterance the VAD dropped: its provisional line must go.
+fn is_discard(segment: &AudioSegment) -> bool {
+  segment.is_final && segment.samples.is_empty()
+}
+
+fn line_id(source: TranscriptSource, utterance: u64) -> String {
+  let source = match source {
+    TranscriptSource::Mic => "mic",
+    TranscriptSource::Loopback => "loopback",
+  };
+  format!("{source}-{utterance}")
+}
+
 /// The mic is always the local user; loopback is attributed from the speaking timeline.
 fn speaker(
   source: TranscriptSource,
@@ -274,12 +294,8 @@ fn transcript_line(
   speaker_name: String,
   wall_origin: SystemTime,
 ) -> TranscriptLine {
-  let source = match job.source {
-    TranscriptSource::Mic => "mic",
-    TranscriptSource::Loopback => "loopback",
-  };
   TranscriptLine {
-    id: format!("{source}-{}", job.segment.utterance),
+    id: line_id(job.source, job.segment.utterance),
     speaker_id,
     speaker_name,
     text,
@@ -368,6 +384,17 @@ mod tests {
         .map(|j| j.segment.utterance),
       Some(7)
     );
+  }
+
+  #[test]
+  fn empty_final_is_a_discard_and_nothing_else_is() {
+    let mut j = job(TranscriptSource::Mic, 4, true);
+    assert!(!is_discard(&j.segment));
+    j.segment.samples.clear();
+    assert!(is_discard(&j.segment));
+    j.segment.is_final = false;
+    assert!(!is_discard(&j.segment));
+    assert_eq!(line_id(TranscriptSource::Loopback, 4), "loopback-4");
   }
 
   #[test]
