@@ -1,3 +1,4 @@
+mod caption_panel;
 mod message_row;
 mod messages_section;
 mod soundboard;
@@ -6,6 +7,7 @@ mod user_row;
 mod voice_controls;
 mod voice_section;
 
+pub use caption_panel::CaptionPanel;
 pub use message_row::MessageRow;
 pub use messages_section::MessagesSection;
 pub use soundboard::Soundboard;
