@@ -3,10 +3,12 @@
 #[cfg(target_os = "linux")]
 mod loopback_linux;
 mod mic;
+mod resample;
 
 #[cfg(target_os = "linux")]
 pub use loopback_linux::LoopbackSource;
 pub use mic::MicSource;
+pub use resample::{MonoResampler, TARGET_RATE};
 
 use std::fmt;
 use std::time::{Duration, Instant};
