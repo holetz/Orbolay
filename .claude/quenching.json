@@ -1,3 +1,11 @@
 {
-  "integrationBranch": "develop"
+  "integrationBranch": "develop",
+  "backend": "git",
+  "specs": {
+    "card": { "provider": "none" },
+    "workItemTypes": {
+      "epic": { "description": "An umbrella spec whose tasks are member specs" },
+      "feature": { "description": "A buildable product change", "default": true }
+    }
+  }
 }
